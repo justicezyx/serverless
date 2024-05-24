@@ -1,111 +1,117 @@
-package main
+package dispatcher
 
 import (
-	"encoding/json"
-	"fmt"
+	"bytes"
+	"context"
+	"flag"
+	"io/ioutil"
+	"log"
 	"net/http"
-	"os/exec"
-	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
-type Request struct {
-	Prompt string `json:"prompt"`
+type RuntimeLauncher struct {
+	ContainerImage string
+
+	DockerCmd []string
 }
 
-type Response struct {
-	Answer string `json:"answer"`
+// Launch runtime instance
+func (l RuntimeLauncher) Launch() RuntimeInstance {
+	return RuntimeInstance{}
 }
 
-var alphaCount, betaCount int
-var mu sync.Mutex
+type Runtime struct {
+	ID string
 
-const maxInstances = 3
+	// The maximal number of instances can run concurrently.
+	MaxInstances int
 
-func startContainer(runtime string) error {
-	cmd := exec.Command("docker", "run", "-d", "--rm", "--name", runtime, "your-container-image", runtime)
-	return cmd.Run()
+	// The launcher to launch instance
+	Launcher RuntimeLauncher
+
+	// Map from endpoint to runtime instance
+	Instances map[string]RuntimeInstance
 }
 
-func stopContainer(runtime string) error {
-	cmd := exec.Command("docker", "stop", runtime)
-	return cmd.Run()
+type Dispatcher struct {
+	// Maximal number of concurrent calls for each serverless runtime.
+	// Beyond this number, new instances will be launched.
+	maxConCallsPerRuntime int
+
+	runtimeInstanceGroups map[string]
+
+	// A group of goroutines can execute concurrently sending requests to different endpoint.
+	// Key is endpoint address
+	exec map[string]errgroup.Group
 }
 
-func dispatchHandler(w http.ResponseWriter, r *http.Request) {
-	var req Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+func forwardRequest(ctx context.Context, r *http.Request) error {
+	// Define the target server URL
+	targetURL := "http://target-server:port/target-endpoint"
 
-	runtime := r.URL.Path[1:]
-
-	mu.Lock()
-	if runtime == "alpha" && alphaCount >= maxInstances {
-		http.Error(w, "Max Alpha instances reached", http.StatusTooManyRequests)
-		mu.Unlock()
-		return
-	} else if runtime == "beta" && betaCount >= maxInstances {
-		http.Error(w, "Max Beta instances reached", http.StatusTooManyRequests)
-		mu.Unlock()
-		return
-	}
-
-	if runtime == "alpha" {
-		alphaCount++
-	} else if runtime == "beta" {
-		betaCount++
-	}
-	mu.Unlock()
-
-	err := startContainer(runtime)
+	// Read the body of the request
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 
-	resp, err := invokeRuntime(runtime, req.Prompt)
+	// Create a new request to the target server
+	req, err := http.NewRequest(r.Method, targetURL, bytes.NewBuffer(body))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
 
-	mu.Lock()
-	if runtime == "alpha" {
-		alphaCount--
-	} else if runtime == "beta" {
-		betaCount--
+	// Copy headers from the original request to the new request
+	for key, values := range r.Header {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
 	}
-	mu.Unlock()
 
-	stopContainer(runtime)
-
-	json.NewEncoder(w).Encode(resp)
-}
-
-func main() {
-	http.HandleFunc("/alpha", dispatchHandler)
-	http.HandleFunc("/beta", dispatchHandler)
-	http.ListenAndServe(":8080", nil)
-}
-
-func invokeRuntime(runtime, prompt string) (*Response, error) {
-	reqBody, err := json.Marshal(Request{Prompt: prompt})
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.Post(fmt.Sprintf("http://localhost:8080/%s", runtime), "application/json", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
-	var response Response
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, err
+	// Log the response status for debugging purposes
+	log.Printf("Response from target server: %s", resp.Status)
+	return nil
+}
+
+func ForwardRequest(w http.ResponseWriter, r *http.Request) {
+	var g errgroup.Group
+	g.SetLimit(3)
+
+	g.Go(func() error {
+		return forwardRequest(context.Background(), r)
+	})
+
+	if err := g.Wait(); err != nil {
+		http.Error(w, "Failed to forward request", http.StatusInternalServerError)
+		return
 	}
 
-	return &response, nil
+	// Send a response back to the client
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Request forwarded successfully"))
+}
+
+func main() {
+	// Define the max-instances flag
+	maxInstances := flag.Int("max-instances", 5, "Maximum number of concurrent instances")
+	targetURL := flag.String("target-url", "http://target-server:port/target-endpoint", "URL of the target server")
+	flag.Parse()
+
+	// Set up the HTTP server
+	http.HandleFunc("/forward", ForwardRequest)
+	port := ":8080"
+	log.Printf("Server is listening on port %s", port)
+	if err := http.ListenAndServe(port, nil); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
 
