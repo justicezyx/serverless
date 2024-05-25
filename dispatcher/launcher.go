@@ -38,11 +38,8 @@ func pickPort() (int, error) {
 
 // Launch subprocess and get the PID
 func (l *Launcher) Launch() error {
-	fmt.Println("launch")
 	l.handle = exec.Command(l.cmd[0], l.cmd[1:]...)
-	fmt.Println("handle", l.handle)
 	err := l.handle.Start()
-	fmt.Println("start")
 	if err != nil {
 		return err
 	}
