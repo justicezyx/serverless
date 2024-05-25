@@ -23,7 +23,7 @@ func NewLauncher(cmd []string) Launcher {
 }
 
 // Returns a randomly-picked port. The port can be used by another service to listen on.
-func (l Launcher) pickPort() (int, error) {
+func pickPort() (int, error) {
 	// Listen on a random port by specifying port 0
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -31,6 +31,7 @@ func (l Launcher) pickPort() (int, error) {
 	}
 	// Get the assigned port
 	port := listener.Addr().(*net.TCPAddr).Port
+	// Close the listener.
 	listener.Close()
 	return port, nil
 }
