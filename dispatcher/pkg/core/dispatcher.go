@@ -6,7 +6,7 @@ import (
 	"net/url"
 )
 
-func proxyRequest(target string, w http.ResponseWriter, r *http.Request) {
+func ProxyRequest(target string, w http.ResponseWriter, r *http.Request) {
 	proxyURL, err := url.Parse(target)
 	if err != nil {
 		http.Error(w, "Bad target URL", http.StatusBadRequest)
