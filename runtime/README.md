@@ -2,7 +2,7 @@
 
 ```
 python3 runtime.py --file=runtime_beta.py --class_name=RuntimeBeta
-curl -X POST http://localhost:8080/forward \
+curl -X POST http://localhost:5000/invoke \
     -H "Content-Type: application/json" \
-    -d '{"prompt": "What should I do today?"}'
+    -d '{"args": {"prompt": "What should I do today?"}}'
 ```
