@@ -3,9 +3,7 @@ package dispatcher
 import (
 	"testing"
 
-	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 )
 
 // TestDockerRun tests the Run method of the Docker struct.
@@ -21,26 +19,7 @@ func TestDockerRun(t *testing.T) {
 		"8080": "5000",
 	}
 
-	err = docker.Run(image, cmd, portBindings)
-	assert.Nil(t, err, "Expected no error, got %v", err)
-
-	// Clean up: Stop and remove the container after testing
-	containers, err := docker.Client.ContainerList(context.Background(), container.ListOptions{})
-	if err != nil {
-		t.Fatalf("Failed to list containers: %v", err)
-	}
-
-	for _, c := range containers {
-		timeoutSec := 10
-		// Stop the container with a timeout
-		err = docker.Client.ContainerStop(context.Background(), c.ID, container.StopOptions{Timeout: &timeoutSec})
-		if err != nil {
-			t.Fatalf("Failed to stop container %s: %v", c.ID, err)
-		}
-		// Remove the container
-		err = docker.Client.ContainerRemove(context.Background(), c.ID, container.RemoveOptions{})
-		if err != nil {
-			t.Fatalf("Failed to remove container %s: %v", c.ID, err)
-		}
-	}
+	assert.Nil(t, docker.Run(image, cmd, portBindings), "Expected no error, got %v", err)
+	assert.Nil(t, docker.Stop(), "Expected no error stopping container, got %v", err)
+	assert.Nil(t, docker.Remove(), "Expected no error removing container, got %v", err)
 }

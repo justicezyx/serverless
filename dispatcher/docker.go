@@ -11,7 +11,8 @@ import (
 )
 
 type Docker struct {
-	Client *client.Client
+	Client      *client.Client
+	containerID string
 }
 
 func NewDocker() (*Docker, error) {
@@ -22,6 +23,8 @@ func NewDocker() (*Docker, error) {
 	return &Docker{Client: cli}, nil
 }
 
+// Run the input image, with the input cmd as the entrypoint, and portBindings as port mapping.
+// The input image must be present locally.
 func (d *Docker) Run(image string, cmd []string, portBindings map[string]string) error {
 	ctx := context.Background()
 
@@ -31,28 +34,39 @@ func (d *Docker) Run(image string, cmd []string, portBindings map[string]string)
 		return err
 	}
 
-	// Create the container
 	resp, err := d.Client.ContainerCreate(ctx, &container.Config{
 		Image:        image,
 		Cmd:          cmd,
 		ExposedPorts: exposedPorts,
 	}, &container.HostConfig{
 		PortBindings: portMap,
-	}, &network.NetworkingConfig{}, nil, "")
+	}, &network.NetworkingConfig{}, nil /*platform*/, "" /*name*/)
+
 	if err != nil {
 		return fmt.Errorf("failed to create container: %v", err)
 	}
 
-	// Start the container
 	if err := d.Client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %v", err)
 	}
+	d.containerID = resp.ID
 
-	fmt.Printf("Container %s is running\n", resp.ID)
 	return nil
 }
 
 func (d *Docker) Stop() error {
+	ctx := context.Background()
+	if err := d.Client.ContainerStop(ctx, d.containerID, container.StopOptions{}); err != nil {
+		return fmt.Errorf("failed to stop container %s: %v", d.containerID, err)
+	}
+	return nil
+}
+
+func (d *Docker) Remove() error {
+	err := d.Client.ContainerRemove(context.Background(), d.containerID, container.RemoveOptions{})
+	if err != nil {
+		return fmt.Errorf("Failed to remove container %s: %v", d.containerID, err)
+	}
 	return nil
 }
 
