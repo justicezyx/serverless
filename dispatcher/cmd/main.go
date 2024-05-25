@@ -1,19 +1,14 @@
 package main
 
 import (
-	"flag"
+	"dispatcher"
 	"log"
 	"net/http"
 
-	"zyx.com/serverless/dispatcher"
+	"github.com/justicezyx/serverless/dispatcher"
 )
 
 func main() {
-	// Define the max-instances flag
-	maxInstances := flag.Int("max-instances", 5, "Maximum number of concurrent instances")
-	targetURL := flag.String("target-url", "http://target-server:port/target-endpoint", "URL of the target server")
-	flag.Parse()
-
 	// Set up the HTTP server
 	http.HandleFunc("/forward", dispatcher.ForwardRequest)
 	port := ":8080"
