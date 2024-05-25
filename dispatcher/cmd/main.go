@@ -1,11 +1,9 @@
 package main
 
 import (
-	"dispatcher"
 	"log"
 	"net/http"
-
-	"github.com/justicezyx/serverless/dispatcher"
+	"serverless/pkg/dispatcher"
 )
 
 func main() {
