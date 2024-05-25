@@ -45,4 +45,6 @@ if __name__ == '__main__':
     # Initializing a runtime instance with the provided file path and class name
     runtime_instance = ServerlessRuntime(runtime_file_path, runtime_class_name)
 
-    app.run(port=5000)
+    # Use host='0.0.0.0' to bind to all local IP address.
+    # This seems necessary when running inside docker container.
+    app.run(host='0.0.0.0', port=5000)
