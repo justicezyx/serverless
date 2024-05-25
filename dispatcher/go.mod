@@ -1,4 +1,4 @@
-module serverless
+module serverless/dispatcher
 
 go 1.21.1
 
@@ -38,4 +38,4 @@ require (
 	gotest.tools/v3 v3.5.1 // indirect
 )
 
-replace serverless => ./
+replace serverless/dispatcher => ./
