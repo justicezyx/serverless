@@ -39,7 +39,7 @@ func (d *Dispatcher) Launch(fn string) error {
 	}
 	rc, err := c.Run()
 	if err != nil {
-		return fmt.Errorf("Could not run container for function(%s), error: %v", fn, err)
+		return fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
 	}
 	d.urlInstanceMap[rc.Url] = rc
 	if _, ok := d.fnInstanceMap[fn]; !ok {

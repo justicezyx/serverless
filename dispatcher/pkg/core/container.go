@@ -123,7 +123,7 @@ func (c Container) Run() (RunningContainer, error) {
 
 	return RunningContainer{
 		containerID: resp.ID,
-		Url:         fmt.Sprintf("http://localhost:%d", hostPort),
+		Url:         fmt.Sprintf("http://localhost:%d/invoke", hostPort),
 	}, nil
 }
 
