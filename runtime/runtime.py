@@ -16,6 +16,8 @@ class ServerlessRuntime:
         self.class_path = class_path
         self.class_name = class_name
         self.runtime_class = load_class_from_file(class_path, class_name)()
+        # Ensure load function is called before serving requests.
+        # This is required in the assignment spec.
         self.runtime_class.load()
 
     def handle_request(self, args):
