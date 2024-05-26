@@ -10,64 +10,37 @@ import (
 	"github.com/docker/go-connections/nat"
 )
 
-type Docker struct {
-	Client      *client.Client
-	containerID string
-}
+var (
+	dockerClient *client.Client
+)
 
-func NewDocker() (*Docker, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, err
-	}
-	return &Docker{Client: cli}, nil
-}
-
-// Run the input image, with the input cmd as the entrypoint, and portBindings as port mapping.
-// The input image must be present locally.
-func (d *Docker) Run(image string, cmd []string, portBindings map[string]string) error {
-	ctx := context.Background()
-
-	// Configure exposed ports and port bindings
-	exposedPorts, portMap, err := preparePortBindings(portBindings)
+func InitDockerClient() error {
+	var err error
+	dockerClient, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return err
 	}
-
-	resp, err := d.Client.ContainerCreate(ctx, &container.Config{
-		Image:        image,
-		Cmd:          cmd,
-		ExposedPorts: exposedPorts,
-	}, &container.HostConfig{
-		PortBindings: portMap,
-	}, &network.NetworkingConfig{}, nil /*platform*/, "" /*name*/)
-
-	if err != nil {
-		return fmt.Errorf("failed to create container: %v", err)
-	}
-
-	if err := d.Client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("failed to start container: %v", err)
-	}
-	d.containerID = resp.ID
-
 	return nil
 }
 
-func (d *Docker) Stop() error {
-	ctx := context.Background()
-	if err := d.Client.ContainerStop(ctx, d.containerID, container.StopOptions{}); err != nil {
-		return fmt.Errorf("failed to stop container %s: %v", d.containerID, err)
-	}
-	return nil
+// Represents a template of container. After running, a RunningContainer will be created.
+type Container struct {
+	image string
+	cmd   []string
 }
 
-func (d *Docker) Remove() error {
-	err := d.Client.ContainerRemove(context.Background(), d.containerID, container.RemoveOptions{})
-	if err != nil {
-		return fmt.Errorf("Failed to remove container %s: %v", d.containerID, err)
+func NewContainer(image string, cmd []string) Container {
+	return Container{
+		image: image,
+		cmd:   cmd,
 	}
-	return nil
+}
+
+type RunningContainer struct {
+	containerID string
+
+	// The URL to invoke APIs running inside this Container
+	Url string
 }
 
 func preparePortBindings(portBindings map[string]string) (nat.PortSet, nat.PortMap, error) {
@@ -88,4 +61,50 @@ func preparePortBindings(portBindings map[string]string) (nat.PortSet, nat.PortM
 	}
 
 	return exposedPorts, portMap, nil
+}
+
+// Run the input image, with the input cmd as the entrypoint, and portBindings as port mapping.
+// The input image must be present locally.
+func (c Container) Run(portBindings map[string]string) (RunningContainer, error) {
+	ctx := context.Background()
+
+	// Configure exposed ports and port bindings
+	exposedPorts, portMap, err := preparePortBindings(portBindings)
+	if err != nil {
+		return RunningContainer{}, err
+	}
+
+	resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
+		Image:        c.image,
+		Cmd:          c.cmd,
+		ExposedPorts: exposedPorts,
+	}, &container.HostConfig{
+		PortBindings: portMap,
+	}, &network.NetworkingConfig{}, nil /*platform*/, "" /*name*/)
+
+	if err != nil {
+		return RunningContainer{}, fmt.Errorf("failed to create container: %v", err)
+	}
+
+	if err := dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return RunningContainer{}, fmt.Errorf("failed to start container: %v", err)
+	}
+
+	return RunningContainer{containerID: resp.ID}, nil
+}
+
+func (c RunningContainer) Stop() error {
+	ctx := context.Background()
+	if err := dockerClient.ContainerStop(ctx, c.containerID, container.StopOptions{}); err != nil {
+		return fmt.Errorf("failed to stop container %s: %v", c.containerID, err)
+	}
+	return nil
+}
+
+func (c RunningContainer) Remove() error {
+	err := dockerClient.ContainerRemove(context.Background(), c.containerID, container.RemoveOptions{})
+	if err != nil {
+		return fmt.Errorf("Failed to remove container %s: %v", c.containerID, err)
+	}
+	return nil
 }
