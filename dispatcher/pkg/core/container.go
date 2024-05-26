@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -11,9 +13,11 @@ import (
 )
 
 var (
+	// Package-shared docker client.
 	dockerClient *client.Client
 )
 
+// This must be called before using any APIs in this file.
 func InitDockerClient() error {
 	var err error
 	dockerClient, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -21,6 +25,11 @@ func InitDockerClient() error {
 		return err
 	}
 	return nil
+}
+
+// Define the Container interface
+type ContainerInterface interface {
+	Run() (RunningContainer, error)
 }
 
 // Represents a template of container. After running, a RunningContainer will be created.
@@ -63,15 +72,37 @@ func preparePortBindings(portBindings map[string]string) (nat.PortSet, nat.PortM
 	return exposedPorts, portMap, nil
 }
 
+// Returns a randomly-picked port. The port can be used by another service to listen on.
+func pickPort() (int, error) {
+	// Listen on a random port by specifying port 0
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, fmt.Errorf("Error listening on port: %v\n", err)
+	}
+	// Get the assigned port
+	port := listener.Addr().(*net.TCPAddr).Port
+	// Close the listener.
+	listener.Close()
+	return port, nil
+}
+
+// The port used by the service running inside to Container to accept requests.
+const runtimePort = "5000"
+
 // Run the input image, with the input cmd as the entrypoint, and portBindings as port mapping.
 // The input image must be present locally.
-func (c Container) Run(portBindings map[string]string) (RunningContainer, error) {
+func (c Container) Run() (RunningContainer, error) {
 	ctx := context.Background()
 
+	hostPort, err := pickPort()
+	if err != nil {
+		return RunningContainer{}, fmt.Errorf("Could not find free port for launching container instance, error: %v", err)
+	}
 	// Configure exposed ports and port bindings
+	portBindings := map[string]string{strconv.Itoa(hostPort): runtimePort}
 	exposedPorts, portMap, err := preparePortBindings(portBindings)
 	if err != nil {
-		return RunningContainer{}, err
+		return RunningContainer{}, fmt.Errorf("Error preparing port binding, error: %v", err)
 	}
 
 	resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
@@ -90,7 +121,10 @@ func (c Container) Run(portBindings map[string]string) (RunningContainer, error)
 		return RunningContainer{}, fmt.Errorf("failed to start container: %v", err)
 	}
 
-	return RunningContainer{containerID: resp.ID}, nil
+	return RunningContainer{
+		containerID: resp.ID,
+		Url:         fmt.Sprintf("http://localhost:%d", hostPort),
+	}, nil
 }
 
 func (c RunningContainer) Stop() error {
