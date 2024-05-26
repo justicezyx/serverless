@@ -29,6 +29,12 @@ func TestDockerRun(t *testing.T) {
 
 	assert.Nil(t, err, "Expected no error, got %v", err)
 	assert.NotEmpty(t, rc.Url, "Expect non-empty URL to the container instance")
+
+	timer = NewTimer()
 	assert.Nil(t, rc.Stop(), "Expected no error stopping container")
+	fmt.Println("StopContainer time duration:", timer.Elapsed())
+
+	timer = NewTimer()
 	assert.Nil(t, rc.Remove(), "Expected no error removing container")
+	fmt.Println("RemoveContainer time duration:", timer.Elapsed())
 }
