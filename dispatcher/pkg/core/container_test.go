@@ -11,14 +11,13 @@ import (
 func TestDockerRun(t *testing.T) {
 	require.Nil(t, InitDockerClient(), "InitDockerClient must succeed")
 
+	// Go to $ToT/runtime for instructions of building this image.
+	// This image has to be built locally, we don't do docker pull.
 	image := "runtime:latest"
 	cmd := []string{"python", "runtime.py", "--file=runtime_alpha.py", "--class_name=RuntimeAlpha"}
 	container := NewContainer(image, cmd)
 
-	portBindings := map[string]string{
-		"9000" /*host port*/ : "5000", /*container port*/
-	}
-	rc, err := container.Run(portBindings)
+	rc, err := container.Run()
 	assert.Nil(t, err, "Expected no error, got %v", err)
 
 	assert.Nil(t, rc.Stop(), "Expected no error stopping container")
