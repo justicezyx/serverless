@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sync"
 )
 
 // Launcher stores containers for starting instances to serve function invocations.
@@ -59,16 +60,20 @@ func (d Launcher) PickUrl(fn string) (string, error) {
 
 // Shutdown all container instances. Called when shutting down server.
 func (d *Launcher) ShutdownAll() {
+	var wg sync.WaitGroup
 	for _, runningContainers := range d.fnInstanceMap {
 		for _, runningContainer := range runningContainers {
-			err := runningContainer.Stop()
-			if err != nil {
-				log.Println("Failed to stop running container:", runningContainer)
-			}
-			err = runningContainer.Remove()
-			if err != nil {
-				log.Println("Failed to remove running container:", runningContainer)
-			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := runningContainer.Stop(); err != nil {
+					log.Println("Failed to stop running container:", runningContainer)
+				}
+				if err := runningContainer.Remove(); err != nil {
+					log.Println("Failed to remove running container:", runningContainer)
+				}
+			}()
 		}
 	}
+	wg.Wait()
 }
