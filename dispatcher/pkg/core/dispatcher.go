@@ -40,9 +40,6 @@ func init() {
 	initPermMgr()
 }
 
-func checkPerm(user, api string, w http.ResponseWriter, r *http.Request) {
-}
-
 func Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
 	user := r.Header.Get("User")
 	if user == "" {
@@ -55,9 +52,9 @@ func Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Launching instances and return the URL.
 	target, err := launcher.PickUrl(fn)
 	if err != nil {
+		// Launch new instances
 		launchErr := launcher.Launch(fn)
 		if launchErr != nil {
 			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", fn, launchErr),
