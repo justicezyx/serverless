@@ -6,16 +6,22 @@ import (
 	"time"
 )
 
-const runtimeImage = "runtime:latest"
+type Dispatcher struct {
+	launcher        Launcher
+	permMgr         PermMgr
+	apiMgr          APIMgr
+	apiUsageTracker APIUsageTracker
+}
 
-var launcher Launcher
+func NewDispatcher() Dispatcher {
+	dispatcher := Dispatcher{
+		launcher:        NewLauncher(),
+		permMgr:         NewPermMgr(),
+		apiMgr:          NewAPIMgr(3 /*default*/),
+		apiUsageTracker: NewAPIUsageTracker(),
+	}
 
-var permMgr PermMgr
-
-var apiMgr APIMgr
-
-func initLauncher() {
-	launcher = NewLauncher()
+	const runtimeImage = "runtime:latest"
 
 	alphaContainer := Container{
 		image: runtimeImage,
@@ -27,69 +33,59 @@ func initLauncher() {
 		cmd:   []string{"python", "runtime.py", "--file=runtime_beta.py", "--class_name=RuntimeBeta"},
 	}
 
-	launcher.registerContainer("alpha", alphaContainer)
-	launcher.registerContainer("beta", betaContainer)
+	dispatcher.launcher.registerContainer("alpha", alphaContainer)
+	dispatcher.launcher.registerContainer("beta", betaContainer)
+
+	dispatcher.permMgr.AllowUserAPI("test", "alpha")
+	dispatcher.permMgr.AllowUserAPI("test", "beta")
+
+	return dispatcher
 }
 
-func initPermMgr() {
-	permMgr = NewPermMgr()
-
-	permMgr.AllowUserAPI("test", "alpha")
-	permMgr.AllowUserAPI("test", "beta")
+func (d *Dispatcher) SetAPIConcurLimit(limit int64) {
+	d.apiMgr.SetLimit(limit)
 }
 
-func initAPIMgr() {
-	apiMgr = NewAPIMgr(3 /*default*/)
+func (d *Dispatcher) GetAPIMgr() *APIMgr {
+	return &d.apiMgr
 }
 
-func init() {
-	initLauncher()
-	initPermMgr()
-	initAPIMgr()
+func (d *Dispatcher) Shutdown() {
+	d.launcher.ShutdownAll()
 }
 
-func SetAPIConcurLimit(limit int64) {
-	apiMgr.SetLimit(limit)
-}
-
-func GetAPIMgr() *APIMgr {
-	return &apiMgr
-}
-
-func Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
+func (d *Dispatcher) Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
 	user := r.Header.Get("User")
 	if user == "" {
 		http.Error(w, "User header not provided", http.StatusBadRequest)
 		return
 	}
 
-	if !permMgr.IsUserAllowed(user, fn) {
+	if !d.permMgr.IsUserAllowed(user, fn) {
 		http.Error(w, fmt.Sprintf("User %s is not allowed to call function %s", user, fn), http.StatusForbidden)
 		return
 	}
 
-	target, err := launcher.PickUrl(fn)
+	target, err := d.launcher.PickUrl(fn)
 	if err != nil {
 		// Launch new instances
-		launchErr := launcher.Launch(fn)
+		launchErr := d.launcher.Launch(fn)
 		if launchErr != nil {
 			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", fn, launchErr),
 				http.StatusInternalServerError)
 			return
 		}
 	}
-	target, err = launcher.PickUrl(fn)
+	target, err = d.launcher.PickUrl(fn)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Could not find container instance for function '%s', error: %v", fn, err),
 			http.StatusInternalServerError)
 		return
 	}
 
-	apiMgr.StartAPICall(fn, 10*time.Second)
+	d.apiMgr.StartAPICall(fn, 10*time.Second)
+	apiStartTime := d.apiUsageTracker.StartAPICall(user)
 	ProxyRequest(target, w, r)
-	apiMgr.FinishAPICall(fn)
-}
-
-func Shutdown() {
-	launcher.ShutdownAll()
+	d.apiUsageTracker.EndAPICall(user, apiStartTime)
+	d.apiMgr.FinishAPICall(fn)
 }

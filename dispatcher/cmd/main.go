@@ -13,34 +13,29 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func cleanup() {
-	// Perform any necessary cleanup here
-	log.Println("Performing cleanup tasks...")
-	core.Shutdown()
-	log.Println("Cleanup completed.")
-}
-
 func main() {
 	var concurLimit int64
 	flag.Int64Var(&concurLimit, "concur_limit", 3, "Set the concurrency limit")
 
 	flag.Parse()
 
-	core.SetAPIConcurLimit(concurLimit)
+	dispatcher := core.NewDispatcher()
+
+	dispatcher.SetAPIConcurLimit(concurLimit)
 	log.Println("API limit is set to", concurLimit)
 
 	r := mux.NewRouter()
 	r.HandleFunc("/alpha", func(w http.ResponseWriter, r *http.Request) {
-		core.Dispatch("alpha", w, r)
+		dispatcher.Dispatch("alpha", w, r)
 	})
 	r.HandleFunc("/beta", func(w http.ResponseWriter, r *http.Request) {
-		core.Dispatch("beta", w, r)
+		dispatcher.Dispatch("beta", w, r)
 	})
 
 	ticker := core.NewTicker(time.Second)
 	ticker.Start(func() {
-		log.Println("apiMgr count alpha", core.GetAPIMgr().GetConcurrentCallCount("alpha"))
-		log.Println("apiMgr count beta", core.GetAPIMgr().GetConcurrentCallCount("beta"))
+		log.Println("apiMgr count alpha", dispatcher.GetAPIMgr().GetConcurrentCallCount("alpha"))
+		log.Println("apiMgr count beta", dispatcher.GetAPIMgr().GetConcurrentCallCount("beta"))
 	})
 
 	// Channel to listen for interrupt signals
@@ -60,7 +55,7 @@ func main() {
 
 	ticker.Stop()
 	// Perform cleanup tasks
-	cleanup()
+	dispatcher.Shutdown()
 
 	log.Println("Server gracefully stopped.")
 	os.Exit(0)

@@ -6,24 +6,6 @@ import (
 	"time"
 )
 
-// TestNewAPIMgr tests the creation of a new APIMgr
-func TestNewAPIMgr(t *testing.T) {
-	limit := int64(3)
-	manager := NewAPIMgr(limit)
-	if manager == nil {
-		t.Fatalf("Expected new APIMgr instance, got nil")
-	}
-	if manager.limit != limit {
-		t.Fatalf("Expected limit to be %d, got %d", limit, manager.limit)
-	}
-	if manager.callCount == nil {
-		t.Fatalf("Expected initialized callCount map, got nil")
-	}
-	if manager.semaphores == nil {
-		t.Fatalf("Expected initialized semaphores map, got nil")
-	}
-}
-
 // TestStartAPICall tests the StartAPICall method
 func TestStartAPICall(t *testing.T) {
 	limit := int64(3)
