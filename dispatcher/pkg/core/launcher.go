@@ -11,7 +11,8 @@ type Launcher struct {
 	// ContainerInterface is for testing.
 	fnContainerMap map[string]ContainerInterface
 
-	// A map from the function to the corresponding container.
+	// A map from the function to the corresponding running container instances.
+	// Picking any one of these instances for serving the function.
 	fnInstanceMap map[string][]RunningContainer
 }
 
@@ -22,10 +23,12 @@ func NewLauncher() Launcher {
 	}
 }
 
-func (d *Launcher) RegisterContainer(fn string, c ContainerInterface) {
+// Used for testing.
+func (d *Launcher) registerContainer(fn string, c ContainerInterface) {
 	d.fnContainerMap[fn] = c
 }
 
+// Launch a container instance for serving function fn.
 func (d *Launcher) Launch(fn string) error {
 	c, ok := d.fnContainerMap[fn]
 	if !ok {
@@ -42,7 +45,8 @@ func (d *Launcher) Launch(fn string) error {
 	return nil
 }
 
-// Returns the URL for the particular function.
+// Returns the URL for serving the input function.
+// Picks a random container instances, and returns its URL.
 func (d Launcher) PickUrl(fn string) (string, error) {
 	rcs, ok := d.fnInstanceMap[fn]
 	if !ok || len(rcs) == 0 {

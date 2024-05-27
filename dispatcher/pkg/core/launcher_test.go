@@ -74,7 +74,7 @@ func TestLauncher_LaunchRunError(t *testing.T) {
 	dispatcher := NewLauncher()
 
 	mockContainer := new(MockContainer)
-	dispatcher.RegisterContainer("testFn", mockContainer)
+	dispatcher.registerContainer("testFn", mockContainer)
 
 	mockContainer.On("Run", mock.Anything).Return(RunningContainer{}, errors.New("run error"))
 
