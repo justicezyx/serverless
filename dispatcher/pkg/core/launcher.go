@@ -2,42 +2,56 @@ package core
 
 import (
 	"fmt"
-	"os/exec"
+	"math/rand"
 )
 
-// Launcher launches a subprocess to run the cmd.
 type Launcher struct {
-	cmd []string
+	// Map from the function to the Container template.
+	fnContainerMap map[string]ContainerInterface
 
-	handle *exec.Cmd
+	// A map from the exposed url of docker and the running docker container.
+	// This is used to route request to corresponding container.
+	urlInstanceMap map[string]RunningContainer
+
+	// A map from the function to the corresponding container.
+	fnInstanceMap map[string][]RunningContainer
 }
 
-func NewLauncher(cmd []string) Launcher {
-	if len(cmd) <= 0 {
-		panic(fmt.Sprintf("Illformed command: %v", cmd))
-	}
+func NewLauncher() Launcher {
 	return Launcher{
-		cmd: cmd,
+		fnContainerMap: make(map[string]ContainerInterface),
+		urlInstanceMap: make(map[string]RunningContainer),
+		fnInstanceMap:  make(map[string][]RunningContainer),
 	}
 }
 
-// Launch subprocess and get the PID
-func (l *Launcher) Launch(port int) error {
-	l.handle = exec.Command(l.cmd[0], l.cmd[1:]...)
-	err := l.handle.Start()
-	if err != nil {
-		return err
+func (d *Launcher) RegisterContainer(fn string, c ContainerInterface) {
+	d.fnContainerMap[fn] = c
+}
+
+func (d *Launcher) Launch(fn string) error {
+	c, ok := d.fnContainerMap[fn]
+	if !ok {
+		return fmt.Errorf("Could not find Container for serverless function %s", fn)
 	}
+	rc, err := c.Run()
+	if err != nil {
+		return fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
+	}
+	d.urlInstanceMap[rc.Url] = rc
+	if _, ok := d.fnInstanceMap[fn]; !ok {
+		d.fnInstanceMap[fn] = make([]RunningContainer, 0)
+	}
+	d.fnInstanceMap[fn] = append(d.fnInstanceMap[fn], rc)
 	return nil
 }
 
-func (l *Launcher) Kill() error {
-	// The process has not been launched.
-	if l.handle == nil {
-		return nil
+// Returns the URL for the particular function.
+func (d Launcher) PickUrl(fn string) (string, error) {
+	rcs, ok := d.fnInstanceMap[fn]
+	if !ok || len(rcs) == 0 {
+		return "", fmt.Errorf("No running container for function %s", fn)
 	}
-	if l.handle.Process != nil {
-		return l.handle.Process.Kill()
-	}
-	return fmt.Errorf("subprocess not running")
+	idx := rand.Intn(len(rcs))
+	return rcs[idx].Url, nil
 }
