@@ -63,11 +63,11 @@ func (d *Launcher) ShutdownAll() {
 		for _, runningContainer := range runningContainers {
 			err := runningContainer.Stop()
 			if err != nil {
-				log.Println("Failed to stop running container: %v", runningContainer)
+				log.Println("Failed to stop running container:", runningContainer)
 			}
 			err = runningContainer.Remove()
 			if err != nil {
-				log.Println("Failed to remove running container: %v", runningContainer)
+				log.Println("Failed to remove running container:", runningContainer)
 			}
 		}
 	}
