@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"net/http"
+	"time"
 )
 
 const runtimeImage = "runtime:latest"
@@ -10,6 +11,8 @@ const runtimeImage = "runtime:latest"
 var launcher Launcher
 
 var permMgr PermMgr
+
+var apiMgr APIMgr
 
 func initLauncher() {
 	launcher = NewLauncher()
@@ -35,9 +38,22 @@ func initPermMgr() {
 	permMgr.AllowUserAPI("test", "beta")
 }
 
+func initAPIMgr() {
+	apiMgr = NewAPIMgr(3 /*default*/)
+}
+
 func init() {
 	initLauncher()
 	initPermMgr()
+	initAPIMgr()
+}
+
+func SetAPIConcurLimit(limit int64) {
+	apiMgr.SetLimit(limit)
+}
+
+func GetAPIMgr() *APIMgr {
+	return &apiMgr
 }
 
 func Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
@@ -68,7 +84,10 @@ func Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError)
 		return
 	}
+
+	apiMgr.StartAPICall(fn, 10*time.Second)
 	ProxyRequest(target, w, r)
+	apiMgr.FinishAPICall(fn)
 }
 
 func Shutdown() {

@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-// TestNewAPIManager tests the creation of a new APIManager
-func TestNewAPIManager(t *testing.T) {
+// TestNewAPIMgr tests the creation of a new APIMgr
+func TestNewAPIMgr(t *testing.T) {
 	limit := int64(3)
-	manager := NewAPIManager(limit)
+	manager := NewAPIMgr(limit)
 	if manager == nil {
-		t.Fatalf("Expected new APIManager instance, got nil")
+		t.Fatalf("Expected new APIMgr instance, got nil")
 	}
 	if manager.limit != limit {
 		t.Fatalf("Expected limit to be %d, got %d", limit, manager.limit)
@@ -27,7 +27,7 @@ func TestNewAPIManager(t *testing.T) {
 // TestStartAPICall tests the StartAPICall method
 func TestStartAPICall(t *testing.T) {
 	limit := int64(3)
-	manager := NewAPIManager(limit)
+	manager := NewAPIMgr(limit)
 
 	api := "exampleAPI"
 	if !manager.StartAPICall(api, 1*time.Second) {
@@ -50,7 +50,7 @@ func TestStartAPICall(t *testing.T) {
 // TestFinishAPICall tests the FinishAPICall method
 func TestFinishAPICall(t *testing.T) {
 	limit := int64(3)
-	manager := NewAPIManager(limit)
+	manager := NewAPIMgr(limit)
 
 	api := "exampleAPI"
 	manager.StartAPICall(api, 1*time.Second)
@@ -70,7 +70,7 @@ func TestFinishAPICall(t *testing.T) {
 // TestConcurrentCalls tests concurrent API calls
 func TestConcurrentCalls(t *testing.T) {
 	limit := int64(3)
-	manager := NewAPIManager(limit)
+	manager := NewAPIMgr(limit)
 
 	api := "exampleAPI"
 	var wg sync.WaitGroup
@@ -94,7 +94,7 @@ func TestConcurrentCalls(t *testing.T) {
 // TestStartAPICallTimeout tests the timeout when starting an API call
 func TestStartAPICallTimeout(t *testing.T) {
 	limit := int64(1)
-	manager := NewAPIManager(limit)
+	manager := NewAPIMgr(limit)
 
 	api := "exampleAPI"
 	if !manager.StartAPICall(api, 1*time.Second) {

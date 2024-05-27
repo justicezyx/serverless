@@ -6,22 +6,22 @@ import (
 	"time"
 )
 
-type APIManager struct {
+type APIMgr struct {
 	limit      int64
 	callCount  map[string]*int64
 	semaphores map[string]chan struct{}
 	mu         sync.Mutex
 }
 
-func NewAPIManager(limit int64) *APIManager {
-	return &APIManager{
+func NewAPIMgr(limit int64) APIMgr {
+	return APIMgr{
 		limit:      limit,
 		callCount:  make(map[string]*int64),
 		semaphores: make(map[string]chan struct{}),
 	}
 }
 
-func (m *APIManager) StartAPICall(api string, timeout time.Duration) bool {
+func (m *APIMgr) StartAPICall(api string, timeout time.Duration) bool {
 	var semaphore chan struct{}
 
 	m.mu.Lock()
@@ -42,7 +42,7 @@ func (m *APIManager) StartAPICall(api string, timeout time.Duration) bool {
 	}
 }
 
-func (m *APIManager) FinishAPICall(api string) {
+func (m *APIMgr) FinishAPICall(api string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, exists := m.semaphores[api]; exists {
@@ -55,11 +55,17 @@ func (m *APIManager) FinishAPICall(api string) {
 	}
 }
 
-func (m *APIManager) GetConcurrentCallCount(api string) int64 {
+func (m *APIMgr) GetConcurrentCallCount(api string) int64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if count, exists := m.callCount[api]; exists {
 		return atomic.LoadInt64(count)
 	}
 	return 0
+}
+
+func (m *APIMgr) SetLimit(limit int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.limit = limit
 }
