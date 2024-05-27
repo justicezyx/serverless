@@ -6,10 +6,17 @@ import (
 	"time"
 )
 
+// Dispatcher routes traffic into corresponding container instances, and can dynamically launch container instance when
+// requests are high.
 type Dispatcher struct {
-	launcher        Launcher
-	permMgr         PermMgr
-	apiMgr          APIMgr
+	// Launcher launches container instance on incoming requests.
+	launcher Launcher
+
+	// PermMgr checks user's permission to call function.
+	permMgr PermMgr
+
+	// APILimitMgr
+	apiMgr          APILimitMgr
 	apiUsageTracker APIUsageTracker
 }
 
@@ -17,7 +24,7 @@ func NewDispatcher() Dispatcher {
 	dispatcher := Dispatcher{
 		launcher:        NewLauncher(),
 		permMgr:         NewPermMgr(),
-		apiMgr:          NewAPIMgr(3 /*default*/),
+		apiMgr:          NewAPILimitMgr(3 /*default*/),
 		apiUsageTracker: NewAPIUsageTracker(),
 	}
 
@@ -46,7 +53,7 @@ func (d *Dispatcher) SetAPIConcurLimit(limit int64) {
 	d.apiMgr.SetLimit(limit)
 }
 
-func (d *Dispatcher) GetAPIMgr() *APIMgr {
+func (d *Dispatcher) GetAPILimitMgr() *APILimitMgr {
 	return &d.apiMgr
 }
 

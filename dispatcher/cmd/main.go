@@ -34,8 +34,8 @@ func main() {
 
 	ticker := core.NewTicker(time.Second)
 	ticker.Start(func() {
-		log.Println("apiMgr count alpha", dispatcher.GetAPIMgr().GetConcurrentCallCount("alpha"))
-		log.Println("apiMgr count beta", dispatcher.GetAPIMgr().GetConcurrentCallCount("beta"))
+		log.Println("apiMgr count alpha", dispatcher.GetAPILimitMgr().GetConcurrentCallCount("alpha"))
+		log.Println("apiMgr count beta", dispatcher.GetAPILimitMgr().GetConcurrentCallCount("beta"))
 	})
 
 	// Channel to listen for interrupt signals

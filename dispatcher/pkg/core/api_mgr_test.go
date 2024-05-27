@@ -9,7 +9,7 @@ import (
 // TestStartAPICall tests the StartAPICall method
 func TestStartAPICall(t *testing.T) {
 	limit := int64(3)
-	manager := NewAPIMgr(limit)
+	manager := NewAPILimitMgr(limit)
 
 	api := "exampleAPI"
 	if !manager.StartAPICall(api, 1*time.Second) {
@@ -32,7 +32,7 @@ func TestStartAPICall(t *testing.T) {
 // TestFinishAPICall tests the FinishAPICall method
 func TestFinishAPICall(t *testing.T) {
 	limit := int64(3)
-	manager := NewAPIMgr(limit)
+	manager := NewAPILimitMgr(limit)
 
 	api := "exampleAPI"
 	manager.StartAPICall(api, 1*time.Second)
@@ -52,7 +52,7 @@ func TestFinishAPICall(t *testing.T) {
 // TestConcurrentCalls tests concurrent API calls
 func TestConcurrentCalls(t *testing.T) {
 	limit := int64(3)
-	manager := NewAPIMgr(limit)
+	manager := NewAPILimitMgr(limit)
 
 	api := "exampleAPI"
 	var wg sync.WaitGroup
@@ -76,7 +76,7 @@ func TestConcurrentCalls(t *testing.T) {
 // TestStartAPICallTimeout tests the timeout when starting an API call
 func TestStartAPICallTimeout(t *testing.T) {
 	limit := int64(1)
-	manager := NewAPIMgr(limit)
+	manager := NewAPILimitMgr(limit)
 
 	api := "exampleAPI"
 	if !manager.StartAPICall(api, 1*time.Second) {

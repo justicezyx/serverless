@@ -6,22 +6,22 @@ import (
 	"time"
 )
 
-type APIMgr struct {
+type APILimitMgr struct {
 	limit      int64
 	callCount  map[string]*int64
 	semaphores map[string]chan struct{}
 	mu         sync.Mutex
 }
 
-func NewAPIMgr(limit int64) APIMgr {
-	return APIMgr{
+func NewAPILimitMgr(limit int64) APILimitMgr {
+	return APILimitMgr{
 		limit:      limit,
 		callCount:  make(map[string]*int64),
 		semaphores: make(map[string]chan struct{}),
 	}
 }
 
-func (m *APIMgr) StartAPICall(api string, timeout time.Duration) bool {
+func (m *APILimitMgr) StartAPICall(api string, timeout time.Duration) bool {
 	var semaphore chan struct{}
 
 	m.mu.Lock()
@@ -42,7 +42,7 @@ func (m *APIMgr) StartAPICall(api string, timeout time.Duration) bool {
 	}
 }
 
-func (m *APIMgr) FinishAPICall(api string) {
+func (m *APILimitMgr) FinishAPICall(api string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, exists := m.semaphores[api]; exists {
@@ -55,7 +55,7 @@ func (m *APIMgr) FinishAPICall(api string) {
 	}
 }
 
-func (m *APIMgr) GetConcurrentCallCount(api string) int64 {
+func (m *APILimitMgr) GetConcurrentCallCount(api string) int64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if count, exists := m.callCount[api]; exists {
@@ -64,7 +64,7 @@ func (m *APIMgr) GetConcurrentCallCount(api string) int64 {
 	return 0
 }
 
-func (m *APIMgr) SetLimit(limit int64) {
+func (m *APILimitMgr) SetLimit(limit int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.limit = limit
