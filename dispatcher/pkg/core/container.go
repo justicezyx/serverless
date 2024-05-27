@@ -135,6 +135,7 @@ func (c Container) Run() (RunningContainer, error) {
 }
 
 func (c RunningContainer) Stop() error {
+	fmt.Println("stop", c.containerID)
 	ctx := context.Background()
 	if err := dockerClient.ContainerStop(ctx, c.containerID, container.StopOptions{}); err != nil {
 		return fmt.Errorf("failed to stop container %s: %v", c.containerID, err)
@@ -143,6 +144,7 @@ func (c RunningContainer) Stop() error {
 }
 
 func (c RunningContainer) Remove() error {
+	fmt.Println("remove", c.containerID)
 	err := dockerClient.ContainerRemove(context.Background(), c.containerID, container.RemoveOptions{})
 	if err != nil {
 		return fmt.Errorf("Failed to remove container %s: %v", c.containerID, err)

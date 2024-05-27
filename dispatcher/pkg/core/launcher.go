@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 )
 
@@ -54,4 +55,20 @@ func (d Launcher) PickUrl(fn string) (string, error) {
 	}
 	idx := rand.Intn(len(rcs))
 	return rcs[idx].Url, nil
+}
+
+// Shutdown all container instances. Called when shutting down server.
+func (d *Launcher) ShutdownAll() {
+	for _, runningContainers := range d.fnInstanceMap {
+		for _, runningContainer := range runningContainers {
+			err := runningContainer.Stop()
+			if err != nil {
+				log.Println("Failed to stop running container: %v", runningContainer)
+			}
+			err = runningContainer.Remove()
+			if err != nil {
+				log.Println("Failed to remove running container: %v", runningContainer)
+			}
+		}
+	}
 }

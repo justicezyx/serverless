@@ -45,3 +45,7 @@ func Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
 	}
 	ProxyRequest(target, w, r)
 }
+
+func Shutdown() {
+	launcher.ShutdownAll()
+}
