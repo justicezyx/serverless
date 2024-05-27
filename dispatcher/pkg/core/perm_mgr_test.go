@@ -5,7 +5,7 @@ import (
 )
 
 func TestAllowUserAPI(t *testing.T) {
-	uam := NewUserAPIManager()
+	uam := NewPermMgr()
 
 	// Allow a user to access an API
 	uam.AllowUserAPI("user1", "api1")
@@ -16,7 +16,7 @@ func TestAllowUserAPI(t *testing.T) {
 }
 
 func TestIsUserAllowed(t *testing.T) {
-	uam := NewUserAPIManager()
+	uam := NewPermMgr()
 
 	// Initially, the user should not be allowed to access the API
 	if uam.IsUserAllowed("user1", "api1") {

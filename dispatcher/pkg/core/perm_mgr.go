@@ -9,25 +9,25 @@ type PermMgr struct {
 	userAPIs map[string]map[string]bool
 }
 
-func NewUserAPIManager() *PermMgr {
-	return &PermMgr{
+func NewPermMgr() PermMgr {
+	return PermMgr{
 		userAPIs: make(map[string]map[string]bool),
 	}
 }
 
-func (uam *PermMgr) AllowUserAPI(user, api string) {
-	uam.mu.Lock()
-	defer uam.mu.Unlock()
+func (m *PermMgr) AllowUserAPI(user, api string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	if uam.userAPIs[user] == nil {
-		uam.userAPIs[user] = make(map[string]bool)
+	if m.userAPIs[user] == nil {
+		m.userAPIs[user] = make(map[string]bool)
 	}
-	uam.userAPIs[user][api] = true
+	m.userAPIs[user][api] = true
 }
 
-func (uam *PermMgr) IsUserAllowed(user, api string) bool {
-	uam.mu.RLock()
-	defer uam.mu.RUnlock()
+func (m *PermMgr) IsUserAllowed(user, api string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	return uam.userAPIs[user][api]
+	return m.userAPIs[user][api]
 }

@@ -62,7 +62,6 @@ if __name__ == "__main__":
     print("Alpha response:", alpha_response)
     alpha_response = Alpha({"prompt": "What should I eat today?"}, args.user)()
     print("Alpha response:", alpha_response)
-
     # Invoke the Beta Runtime
     beta_response = Beta({"prompt": "What should I eat today?"}, args.user)()
     print("Beta response:", beta_response)
