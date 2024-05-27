@@ -53,7 +53,6 @@ func TestLauncher_Launch(t *testing.T) {
 
 	// Assertions
 	assert.NoError(t, err)
-	assert.Contains(t, dispatcher.urlInstanceMap, "http://localhost:5000")
 	assert.Contains(t, dispatcher.fnInstanceMap, "testFn")
 	assert.Equal(t, dispatcher.fnInstanceMap["testFn"][0].Url, "http://localhost:5000")
 
@@ -82,7 +81,6 @@ func TestLauncher_LaunchRunError(t *testing.T) {
 	err := dispatcher.Launch("testFn")
 
 	assert.Error(t, err)
-	assert.NotContains(t, dispatcher.urlInstanceMap, "http://localhost:5000")
 	assert.NotContains(t, dispatcher.fnInstanceMap, "testFn")
 
 	mockContainer.AssertExpectations(t)

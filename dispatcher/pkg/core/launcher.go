@@ -5,13 +5,11 @@ import (
 	"math/rand"
 )
 
+// Launcher stores containers for starting instances to serve function invocations.
 type Launcher struct {
 	// Map from the function to the Container template.
+	// ContainerInterface is for testing.
 	fnContainerMap map[string]ContainerInterface
-
-	// A map from the exposed url of docker and the running docker container.
-	// This is used to route request to corresponding container.
-	urlInstanceMap map[string]RunningContainer
 
 	// A map from the function to the corresponding container.
 	fnInstanceMap map[string][]RunningContainer
@@ -20,7 +18,6 @@ type Launcher struct {
 func NewLauncher() Launcher {
 	return Launcher{
 		fnContainerMap: make(map[string]ContainerInterface),
-		urlInstanceMap: make(map[string]RunningContainer),
 		fnInstanceMap:  make(map[string][]RunningContainer),
 	}
 }
@@ -38,7 +35,6 @@ func (d *Launcher) Launch(fn string) error {
 	if err != nil {
 		return fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
 	}
-	d.urlInstanceMap[rc.Url] = rc
 	if _, ok := d.fnInstanceMap[fn]; !ok {
 		d.fnInstanceMap[fn] = make([]RunningContainer, 0)
 	}
