@@ -27,6 +27,13 @@ func InitDockerClient() error {
 	return nil
 }
 
+func init() {
+	err := InitDockerClient()
+	if err != nil {
+		panic(fmt.Sprintf("Could not create docker client, error: %v", err))
+	}
+}
+
 // Define the Container interface
 type ContainerInterface interface {
 	Run() (RunningContainer, error)
