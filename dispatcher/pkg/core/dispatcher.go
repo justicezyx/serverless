@@ -15,8 +15,10 @@ type Dispatcher struct {
 	// PermMgr checks user's permission to call function.
 	permMgr PermMgr
 
-	// APILimitMgr
-	apiMgr          APILimitMgr
+	// APILimitMgr determine API call limits.
+	apiLimitMgr APILimitMgr
+
+	// APIUsageTracker tracks users' execution time of serving function invocations.
 	apiUsageTracker APIUsageTracker
 }
 
@@ -24,7 +26,7 @@ func NewDispatcher() Dispatcher {
 	dispatcher := Dispatcher{
 		launcher:        NewLauncher(),
 		permMgr:         NewPermMgr(),
-		apiMgr:          NewAPILimitMgr(3 /*default*/),
+		apiLimitMgr:     NewAPILimitMgr(3 /*default*/),
 		apiUsageTracker: NewAPIUsageTracker(),
 	}
 
@@ -50,11 +52,11 @@ func NewDispatcher() Dispatcher {
 }
 
 func (d *Dispatcher) SetAPIConcurLimit(limit int64) {
-	d.apiMgr.SetLimit(limit)
+	d.apiLimitMgr.SetLimit(limit)
 }
 
 func (d *Dispatcher) GetAPILimitMgr() *APILimitMgr {
-	return &d.apiMgr
+	return &d.apiLimitMgr
 }
 
 func (d *Dispatcher) Shutdown() {
@@ -90,9 +92,9 @@ func (d *Dispatcher) Dispatch(fn string, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	d.apiMgr.StartAPICall(fn, 10*time.Second)
+	d.apiLimitMgr.StartAPICall(fn, 10*time.Second)
 	apiStartTime := d.apiUsageTracker.StartAPICall(user)
 	ProxyRequest(target, w, r)
 	d.apiUsageTracker.EndAPICall(user, apiStartTime)
-	d.apiMgr.FinishAPICall(fn)
+	d.apiLimitMgr.FinishAPICall(fn)
 }

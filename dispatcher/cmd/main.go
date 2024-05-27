@@ -6,11 +6,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"serverless/dispatcher/pkg/core"
 	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
+
+	"serverless/dispatcher/pkg/core"
 )
 
 func main() {
