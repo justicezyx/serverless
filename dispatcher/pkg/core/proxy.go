@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -11,9 +10,7 @@ import (
 
 // Proxy the request to the input target URL.
 func ProxyRequest(target string, w http.ResponseWriter, r *http.Request) {
-	log.Println("target", target)
 	err := WaitForHTTPGetOK(target, 100*time.Millisecond, time.Second)
-	log.Println("ProxyRequest WaitForHTTPGetOK err", err)
 
 	proxyURL, err := url.Parse(target)
 	if err != nil {
@@ -37,8 +34,6 @@ func ProxyRequest(target string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-
-	log.Println("resp", resp)
 
 	for key, value := range resp.Header {
 		w.Header().Set(key, value[0])

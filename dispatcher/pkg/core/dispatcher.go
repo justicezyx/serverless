@@ -2,14 +2,23 @@ package core
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
 
+type dispatcherConfig struct {
+	// The default maximal count of container instances can be run for each function.
+	maxInstCountPerFn map[string]int
+
+	// If users have not configure per function limit, this will be used.
+	defaultMaxInstCountPerFn int
+}
+
 // Dispatcher routes traffic into corresponding container instances, and can dynamically launch container instance when
 // requests are high.
 type Dispatcher struct {
+	cfg dispatcherConfig
+
 	// Launcher launches container instance on incoming requests.
 	launcher Launcher
 
@@ -43,6 +52,7 @@ func NewDispatcher() Dispatcher {
 		cmd:   []string{"python", "runtime.py", "--file=runtime_beta.py", "--class_name=RuntimeBeta"},
 	}
 
+	dispatcher.cfg.defaultMaxInstCountPerFn = 3
 	dispatcher.launcher.registerContainer("alpha", alphaContainer)
 	dispatcher.launcher.registerContainer("beta", betaContainer)
 
@@ -50,6 +60,13 @@ func NewDispatcher() Dispatcher {
 	dispatcher.permMgr.AllowUserAPI("test", "beta")
 
 	return dispatcher
+}
+
+func (d *Dispatcher) getMaxinstCountPerFn(fn string) int {
+	if limit, ok := d.cfg.maxInstCountPerFn[fn]; ok {
+		return limit
+	}
+	return d.cfg.defaultMaxInstCountPerFn
 }
 
 func (d *Dispatcher) SetAPIConcurLimit(limit int64) {
@@ -93,7 +110,6 @@ func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Re
 		// Need to launch new ones.
 		launchErr := d.launcher.Launch(ctx.Fn)
 		if launchErr != nil {
-			log.Println("launchErr", launchErr)
 			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", ctx.Fn, launchErr),
 				http.StatusInternalServerError)
 			return
@@ -111,9 +127,7 @@ func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Re
 
 	d.apiLimitMgr.StartAPICall(ctx.Fn, 10*time.Second)
 	apiStartTime := d.apiUsageTracker.StartAPICall(user)
-	log.Println("Before ProxyRequest")
 	ProxyRequest(target, w, r)
-	log.Println("After ProxyRequest")
 	d.apiUsageTracker.EndAPICall(user, apiStartTime)
 	d.apiLimitMgr.FinishAPICall(ctx.Fn)
 }

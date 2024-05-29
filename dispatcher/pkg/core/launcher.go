@@ -11,29 +11,35 @@ import (
 // Launcher stores containers for starting instances to serve function invocations.
 // TODO: Needs sync.Mutex to protect from concurrent access.
 type Launcher struct {
+	// Set during creation, and never change afterwards.
+	// Therefore mutex protection is not required.
+	//
 	// Map from the function to the Container template.
-	// ContainerInterface is for testing.
+	// ContainerInterface is used for testing.
 	fnContainerMap map[string]ContainerInterface
 
 	// A map from the function to the corresponding running container instances.
 	// Picking any one of these instances for serving the function.
-	fnInstanceMap map[string][]*RunningContainer
+	fnInstsMap   map[string][]*RunningContainer
+	fnInstsMapMu sync.Mutex
 }
 
 func NewLauncher() Launcher {
 	return Launcher{
 		fnContainerMap: make(map[string]ContainerInterface),
-		fnInstanceMap:  make(map[string][]*RunningContainer),
+		fnInstsMap:     make(map[string][]*RunningContainer),
 	}
 }
 
-// Used for testing.
 func (d *Launcher) registerContainer(fn string, c ContainerInterface) {
 	d.fnContainerMap[fn] = c
 }
 
 // Launch a container instance for serving function fn.
 func (d *Launcher) Launch(fn string) error {
+	d.fnInstsMapMu.Lock()
+	defer d.fnInstsMapMu.Unlock()
+
 	c, ok := d.fnContainerMap[fn]
 	if !ok {
 		return fmt.Errorf("Could not find Container for serverless function %s", fn)
@@ -42,18 +48,17 @@ func (d *Launcher) Launch(fn string) error {
 	if err != nil {
 		return fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
 	}
-	if _, ok := d.fnInstanceMap[fn]; !ok {
-		d.fnInstanceMap[fn] = make([]*RunningContainer, 0)
+	if _, ok := d.fnInstsMap[fn]; !ok {
+		d.fnInstsMap[fn] = make([]*RunningContainer, 0)
 	}
-	d.fnInstanceMap[fn] = append(d.fnInstanceMap[fn], rc)
-	log.Println("rc:", rc)
+	d.fnInstsMap[fn] = append(d.fnInstsMap[fn], rc)
 	return rc.WaitForReady(8 * time.Second)
 }
 
 // Returns the URL for serving the input function.
 // Picks a random container instances, and returns its URL.
 func (d Launcher) PickUrl(fn string) (string, error) {
-	rcs, ok := d.fnInstanceMap[fn]
+	rcs, ok := d.fnInstsMap[fn]
 	if !ok || len(rcs) == 0 {
 		return "", fmt.Errorf("No running container for function %s", fn)
 	}
@@ -64,7 +69,7 @@ func (d Launcher) PickUrl(fn string) (string, error) {
 // Shutdown all container instances. Called when shutting down server.
 func (d *Launcher) ShutdownAll() {
 	var wg sync.WaitGroup
-	for _, runningContainers := range d.fnInstanceMap {
+	for _, runningContainers := range d.fnInstsMap {
 		for _, runningContainer := range runningContainers {
 			wg.Add(1)
 			go func() {

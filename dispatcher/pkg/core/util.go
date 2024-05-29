@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
@@ -11,15 +10,12 @@ import (
 // Returns OK if get OK status within timeout.
 func WaitForHTTPGetOK(url string, checkInterval, timeout time.Duration) error {
 	now := time.Now()
-	log.Println("now:", now)
 	deadline := now.Add(timeout)
-	log.Println("deadline:", deadline)
 	for time.Now().Before(deadline) {
 		client := http.Client{
 			Timeout: checkInterval,
 		}
 		resp, err := client.Get(url)
-		log.Println("resp:", resp, "err:", err)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
 			return nil
