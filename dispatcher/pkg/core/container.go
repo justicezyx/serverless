@@ -54,17 +54,17 @@ type RunningContainer struct {
 	// The URL to check the readiness of the service running inside the service.
 	readyUrl string
 
-	// True if the container is ready to serve requests.
-	// Needed because container needs some time to initiate.
-	//
+
 	// TODO: Add mutex protection to check isReady. As the running container will be checked for readiness for each
 	// incoming requests (and if the container is not ready, the caller needs to wait). The check is invoked by HTTP
 	// handler functions for each incoming requests, so they would happen concurrently.
-	//
-	// isReady, readyTime are set until the service is ready.
+	readyMu sync.Mutex
+	// True if the container is ready to serve requests.
+	// Needed because container needs some time to initiate.
+	// Protected by readyMu
 	isReady bool
-
 	// The time when this instance is ready and is able to serve requests.
+	// Protected by readyMu
 	readyTime time.Time
 
 	// The time duration that this instance is actually serving requests.
@@ -166,8 +166,6 @@ func (c Container) Run() (RunningContainer, error) {
 		concurLimit: 2,
 		launchTime:  time.Now(),
 	}
-
-	for
 
 	return res, nil
 }
