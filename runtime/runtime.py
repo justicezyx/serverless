@@ -34,6 +34,10 @@ def invoke():
 
     return jsonify({"response": response})
 
+@app.route('/ready', methods=['GET'])
+def ready():
+    return 'OK', 200
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Serverless Runtime')
     parser.add_argument('--file', required=True, help='Path to the Python file')

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -72,9 +71,57 @@ type RunningContainer struct {
 	busyTime   time.Duration
 }
 
+func (c *RunningContainer) Stop() error {
+	fmt.Println("stop", c.containerID)
+	ctx := context.Background()
+	if err := dockerClient.ContainerStop(ctx, c.containerID, container.StopOptions{}); err != nil {
+		return fmt.Errorf("failed to stop container %s: %v", c.containerID, err)
+	}
+	return nil
+}
+
+func (c *RunningContainer) Remove() error {
+	fmt.Println("remove", c.containerID)
+	err := dockerClient.ContainerRemove(context.Background(), c.containerID, container.RemoveOptions{})
+	if err != nil {
+		return fmt.Errorf("Failed to remove container %s: %v", c.containerID, err)
+	}
+	return nil
+}
+
+// Call this to record serving time.
+func (c *RunningContainer) AddBusyTime(d time.Duration) {
+	c.busyTimeMu.Lock()
+	defer c.busyTimeMu.Unlock()
+	c.busyTime += d
+}
+
+func (c *RunningContainer) BusyTime() time.Duration {
+	c.busyTimeMu.RLock()
+	defer c.busyTimeMu.RUnlock()
+	return c.busyTime
+}
+
+func (c *RunningContainer) WaitForReady(timeout time.Duration) error {
+	err := WaitForHTTPGetOK(c.readyUrl, 100*time.Millisecond, timeout)
+	if err == nil {
+		c.readyMu.Lock()
+		defer c.readyMu.Unlock()
+		c.readyTime = time.Now()
+		c.isReady = true
+	}
+	return err
+}
+
+func (c *RunningContainer) IsReady() bool {
+	c.readyMu.Lock()
+	defer c.readyMu.Unlock()
+	return c.isReady
+}
+
 // Define the Container interface
 type ContainerInterface interface {
-	Run() (RunningContainer, error)
+	Run() (*RunningContainer, error)
 }
 
 // Represents a template of container. After running, a RunningContainer will be created.
@@ -129,18 +176,18 @@ const runtimePort = "5000"
 
 // Run the input image, with the input cmd as the entrypoint, and portBindings as port mapping.
 // The input image must be present locally.
-func (c Container) Run() (RunningContainer, error) {
+func (c Container) Run() (*RunningContainer, error) {
 	ctx := context.Background()
 
 	hostPort, err := pickPort()
 	if err != nil {
-		return RunningContainer{}, fmt.Errorf("Could not find free port for launching container instance, error: %v", err)
+		return nil, fmt.Errorf("Could not find free port for launching container instance, error: %v", err)
 	}
 	// Configure exposed ports and port bindings
 	portBindings := map[string]string{strconv.Itoa(hostPort): runtimePort}
 	exposedPorts, portMap, err := preparePortBindings(portBindings)
 	if err != nil {
-		return RunningContainer{}, fmt.Errorf("Error preparing port binding, error: %v", err)
+		return nil, fmt.Errorf("Error preparing port binding, error: %v", err)
 	}
 
 	resp, err := dockerClient.ContainerCreate(ctx, &container.Config{
@@ -152,66 +199,18 @@ func (c Container) Run() (RunningContainer, error) {
 	}, &network.NetworkingConfig{}, nil /*platform*/, "" /*name*/)
 
 	if err != nil {
-		return RunningContainer{}, fmt.Errorf("failed to create container: %v", err)
+		return nil, fmt.Errorf("failed to create container: %v", err)
 	}
 
 	if err := dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return RunningContainer{}, fmt.Errorf("failed to start container: %v", err)
+		return nil, fmt.Errorf("failed to start container: %v", err)
 	}
 
-	res := RunningContainer{
+	return &RunningContainer{
 		containerID: resp.ID,
 		Url:         fmt.Sprintf("http://localhost:%d/invoke", hostPort),
 		readyUrl:    fmt.Sprintf("http://localhost:%d/ready", hostPort),
 		concurLimit: 2,
 		launchTime:  time.Now(),
-	}
-
-	return res, nil
-}
-
-func (c RunningContainer) Stop() error {
-	fmt.Println("stop", c.containerID)
-	ctx := context.Background()
-	if err := dockerClient.ContainerStop(ctx, c.containerID, container.StopOptions{}); err != nil {
-		return fmt.Errorf("failed to stop container %s: %v", c.containerID, err)
-	}
-	return nil
-}
-
-func (c RunningContainer) Remove() error {
-	fmt.Println("remove", c.containerID)
-	err := dockerClient.ContainerRemove(context.Background(), c.containerID, container.RemoveOptions{})
-	if err != nil {
-		return fmt.Errorf("Failed to remove container %s: %v", c.containerID, err)
-	}
-	return nil
-}
-
-// Call this to record serving time.
-func (c *RunningContainer) AddBusyTime(d time.Duration) {
-	c.busyTimeMu.Lock()
-	defer c.busyTimeMu.Unlock()
-	c.busyTime += d
-}
-
-func (c RunningContainer) BusyTime() time.Duration {
-	c.busyTimeMu.RLock()
-	defer c.busyTimeMu.RUnlock()
-	return c.busyTime
-}
-
-func (c RunningContainer) WaitForReady(timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		resp, err := http.Get(c.readyUrl)
-		if err != nil {
-			resp.Body.Close()
-		}
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return nil
-		}
-		time.Sleep(1 * time.Second)
-	}
-	return fmt.Errorf("request to %s did not succeed within the timeout period", c.readyUrl)
+	}, nil
 }

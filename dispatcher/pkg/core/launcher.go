@@ -8,6 +8,7 @@ import (
 )
 
 // Launcher stores containers for starting instances to serve function invocations.
+// TODO: Needs sync.Mutex to protect from concurrent access.
 type Launcher struct {
 	// Map from the function to the Container template.
 	// ContainerInterface is for testing.
