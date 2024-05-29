@@ -34,6 +34,7 @@ def invoke():
 
     return jsonify({"response": response})
 
+# To indicate ready for serving requests.
 @app.route('/ready', methods=['GET'])
 def ready():
     return 'OK', 200
@@ -42,6 +43,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Serverless Runtime')
     parser.add_argument('--file', required=True, help='Path to the Python file')
     parser.add_argument('--class_name', required=True, help='Name of the class to load')
+    parser.add_argument('--port', default=5000, help='Path to the Python file')
 
     args = parser.parse_args()
 
@@ -53,4 +55,4 @@ if __name__ == '__main__':
 
     # Use host='0.0.0.0' to bind to all local IP address.
     # This seems necessary when running inside docker container.
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=args.port)
