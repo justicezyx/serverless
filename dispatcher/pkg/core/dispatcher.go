@@ -75,9 +75,12 @@ func (d *Dispatcher) Dispatch(fn string, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// TODO/Req: Before calling PickUrl(), should add an API to Launcher to determine if a new RunningContainer should be
+	// launched. Candidate: Launcher::LaunchNewInstances()
 	target, err := d.launcher.PickUrl(fn)
 	if err != nil {
-		// Launch new instances
+		// Indicating there is no running container instances for this function.
+		// Need to launch new ones.
 		launchErr := d.launcher.Launch(fn)
 		if launchErr != nil {
 			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", fn, launchErr),
@@ -86,6 +89,9 @@ func (d *Dispatcher) Dispatch(fn string, w http.ResponseWriter, r *http.Request)
 		}
 	}
 	target, err = d.launcher.PickUrl(fn)
+	// TODO/Req: Wait for the launched instance to be ready. Launcher.Launch() should return a RunningContainer object for
+	// checking readiness. PickUrl() should return a RunningContainer object, and let the caller to wait for readiness.
+
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Could not find container instance for function '%s', error: %v", fn, err),
 			http.StatusInternalServerError)

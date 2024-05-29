@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -34,6 +35,41 @@ func init() {
 	}
 }
 
+type RunningContainer struct {
+	// Fixed parameter, set at launch time.
+	containerID string
+
+	// The URL to invoke APIs running inside this Container
+	// Fixed parameter, set at launch time.
+	Url string
+
+	// The limit of how many concurrent requests this instance can serve.
+	// Fixed parameter, set at launch time.
+	concurLimit int
+
+	// The time when this instance is launched.
+	launchTime time.Time
+
+	// The URL to check the readiness of the service running inside the service.
+	readyUrl string
+
+	// True if the container is ready to serve requests.
+	// Needed because container needs some time to initiate.
+	//
+	// TODO: Add mutex protection to check isReady. As the running container will be checked for readiness for each
+	// incoming requests (and if the container is not ready, the caller needs to wait). The check is invoked by HTTP
+	// handler functions for each incoming requests, so they would happen concurrently.
+	//
+	// Never
+	isReady bool
+
+	// The time when this instance is ready and is able to serve requests.
+	readyTime time.Time
+
+	// The time duration that this instance is actually serving requests.
+	busyTime time.Duration
+}
+
 // Define the Container interface
 type ContainerInterface interface {
 	Run() (RunningContainer, error)
@@ -50,13 +86,6 @@ func NewContainer(image string, cmd []string) Container {
 		image: image,
 		cmd:   cmd,
 	}
-}
-
-type RunningContainer struct {
-	containerID string
-
-	// The URL to invoke APIs running inside this Container
-	Url string
 }
 
 func preparePortBindings(portBindings map[string]string) (nat.PortSet, nat.PortMap, error) {
@@ -93,7 +122,7 @@ func pickPort() (int, error) {
 	return port, nil
 }
 
-// The port used by the service running inside to Container to accept requests.
+// The port used by the service running inside Container to accept requests.
 const runtimePort = "5000"
 
 // Run the input image, with the input cmd as the entrypoint, and portBindings as port mapping.
@@ -131,6 +160,9 @@ func (c Container) Run() (RunningContainer, error) {
 	return RunningContainer{
 		containerID: resp.ID,
 		Url:         fmt.Sprintf("http://localhost:%d/invoke", hostPort),
+		readyUrl:    fmt.Sprintf("http://localhost:%d/ready", hostPort),
+		concurLimit: 2,
+		launchTime:  time.Now(),
 	}, nil
 }
 

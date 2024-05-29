@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+// TODO/Enhancement: Might create an APIContext object to hold all information related to invoking function.
+// And create a APIMgr interface:
+// type APIMgr interface {
+//	 // Called before serving a function call request, so that we can add various checks with the same interface.
+//	 StartAPICall(ctx APIContext) error
+//
+//	 // Called after serving a function call request, serves as campanion to StartAPICall().
+//   FinishAPICall(ctx APIContext) error
+// }
+
 type APILimitMgr struct {
 	limit      int64
 	callCount  map[string]*int64
