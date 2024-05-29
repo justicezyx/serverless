@@ -23,7 +23,6 @@ func (t *Ticker) Start(fn func()) {
 		for {
 			select {
 			case <-t.stop:
-				ticker.Stop()
 				return
 			case <-ticker.C:
 				fn()

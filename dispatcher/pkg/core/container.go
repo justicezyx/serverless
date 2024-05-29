@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -60,14 +61,15 @@ type RunningContainer struct {
 	// incoming requests (and if the container is not ready, the caller needs to wait). The check is invoked by HTTP
 	// handler functions for each incoming requests, so they would happen concurrently.
 	//
-	// Never
+	// isReady, readyTime are set until the service is ready.
 	isReady bool
 
 	// The time when this instance is ready and is able to serve requests.
 	readyTime time.Time
 
 	// The time duration that this instance is actually serving requests.
-	busyTime time.Duration
+	busyTimeMu sync.RWMutex
+	busyTime   time.Duration
 }
 
 // Define the Container interface
@@ -157,13 +159,17 @@ func (c Container) Run() (RunningContainer, error) {
 		return RunningContainer{}, fmt.Errorf("failed to start container: %v", err)
 	}
 
-	return RunningContainer{
+	res := RunningContainer{
 		containerID: resp.ID,
 		Url:         fmt.Sprintf("http://localhost:%d/invoke", hostPort),
 		readyUrl:    fmt.Sprintf("http://localhost:%d/ready", hostPort),
 		concurLimit: 2,
 		launchTime:  time.Now(),
-	}, nil
+	}
+
+	for
+
+	return res, nil
 }
 
 func (c RunningContainer) Stop() error {
@@ -183,3 +189,18 @@ func (c RunningContainer) Remove() error {
 	}
 	return nil
 }
+
+// Call this to record serving time.
+func (c *RunningContainer) AddBusyTime(d time.Duration) {
+	d.busyTimeMu.Lock()
+	defer d.busyTimeMu.Unlock()
+	d.busyTime += d
+}
+
+func (c RunningContainer) BusyTime() time.Duration {
+	d.busyTimeMu.RLock()
+	defer d.busyTimeMu.RUnlock()
+	return d.busyTime
+}
+
+func (c RunningContainer)
