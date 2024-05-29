@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -28,10 +29,18 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/alpha", func(w http.ResponseWriter, r *http.Request) {
-		dispatcher.Dispatch("alpha", w, r)
+		ctx := core.CallContext{
+			Fn:             "alpha",
+			InstRdyTimeout: 12 * time.Second,
+		}
+		dispatcher.Dispatch(ctx, w, r)
 	})
 	r.HandleFunc("/beta", func(w http.ResponseWriter, r *http.Request) {
-		dispatcher.Dispatch("beta", w, r)
+		ctx := core.CallContext{
+			Fn:             "beta",
+			InstRdyTimeout: 12 * time.Second,
+		}
+		dispatcher.Dispatch(ctx, w, r)
 	})
 
 	// Channel to listen for interrupt signals

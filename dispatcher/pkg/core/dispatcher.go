@@ -67,10 +67,10 @@ func (d *Dispatcher) Shutdown() {
 // Contextual information of serving a serverless function call.
 type CallContext struct {
 	// The name of the function to invoke.
-	fn string
+	Fn string
 
-	// The timeout waiting for the function instance to be ready.
-	instRdyTimeout time.Duration
+	// The timeout waiting for the function instance to become ready.
+	InstRdyTimeout time.Duration
 }
 
 func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Request) {
@@ -80,40 +80,40 @@ func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !d.permMgr.IsUserAllowed(user, ctx.fn) {
-		http.Error(w, fmt.Sprintf("User %s is not allowed to call function %s", user, fn), http.StatusForbidden)
+	if !d.permMgr.IsUserAllowed(user, ctx.Fn) {
+		http.Error(w, fmt.Sprintf("User %s is not allowed to call function %s", user, ctx.Fn), http.StatusForbidden)
 		return
 	}
 
 	// TODO/Req: Before calling PickUrl(), should add an API to Launcher to determine if a new RunningContainer should be
 	// launched. Candidate: Launcher::LaunchNewInstances()
-	target, err := d.launcher.PickUrl(ctx.fn)
+	target, err := d.launcher.PickUrl(ctx.Fn)
 	if err != nil {
 		// Indicating there is no running container instances for this function.
 		// Need to launch new ones.
-		launchErr := d.launcher.Launch(ctx.fn)
+		launchErr := d.launcher.Launch(ctx.Fn)
 		if launchErr != nil {
 			log.Println("launchErr", launchErr)
-			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", ctx.fn, launchErr),
+			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", ctx.Fn, launchErr),
 				http.StatusInternalServerError)
 			return
 		}
 	}
-	target, err = d.launcher.PickUrl(ctx.fn)
+	target, err = d.launcher.PickUrl(ctx.Fn)
 	// TODO/Req: Wait for the launched instance to be ready. Launcher.Launch() should return a RunningContainer object for
 	// checking readiness. PickUrl() should return a RunningContainer object, and let the caller to wait for readiness.
 
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Could not find container instance for function '%s', error: %v", ctx.fn, err),
+		http.Error(w, fmt.Sprintf("Could not find container instance for function '%s', error: %v", ctx.Fn, err),
 			http.StatusInternalServerError)
 		return
 	}
 
-	d.apiLimitMgr.StartAPICall(ctx.fn, 10*time.Second)
+	d.apiLimitMgr.StartAPICall(ctx.Fn, 10*time.Second)
 	apiStartTime := d.apiUsageTracker.StartAPICall(user)
 	log.Println("Before ProxyRequest")
 	ProxyRequest(target, w, r)
 	log.Println("After ProxyRequest")
 	d.apiUsageTracker.EndAPICall(user, apiStartTime)
-	d.apiLimitMgr.FinishAPICall(ctx.fn)
+	d.apiLimitMgr.FinishAPICall(ctx.Fn)
 }
