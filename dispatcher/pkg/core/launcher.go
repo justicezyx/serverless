@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"sync"
+	"time"
 )
 
 // Launcher stores containers for starting instances to serve function invocations.
@@ -16,13 +17,13 @@ type Launcher struct {
 
 	// A map from the function to the corresponding running container instances.
 	// Picking any one of these instances for serving the function.
-	fnInstanceMap map[string][]RunningContainer
+	fnInstanceMap map[string][]*RunningContainer
 }
 
 func NewLauncher() Launcher {
 	return Launcher{
 		fnContainerMap: make(map[string]ContainerInterface),
-		fnInstanceMap:  make(map[string][]RunningContainer),
+		fnInstanceMap:  make(map[string][]*RunningContainer),
 	}
 }
 
@@ -42,10 +43,11 @@ func (d *Launcher) Launch(fn string) error {
 		return fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
 	}
 	if _, ok := d.fnInstanceMap[fn]; !ok {
-		d.fnInstanceMap[fn] = make([]RunningContainer, 0)
+		d.fnInstanceMap[fn] = make([]*RunningContainer, 0)
 	}
 	d.fnInstanceMap[fn] = append(d.fnInstanceMap[fn], rc)
-	return nil
+	log.Println("rc:", rc)
+	return rc.WaitForReady(8 * time.Second)
 }
 
 // Returns the URL for serving the input function.

@@ -1,3 +1,4 @@
+import datetime
 import importlib.util
 import argparse
 from flask import Flask, request, jsonify
@@ -29,12 +30,10 @@ runtime_instance = None
 def invoke():
     data = request.json
     args = data.get('args', {})
-
     response = runtime_instance.handle_request(args)
-
     return jsonify({"response": response})
 
-# To indicate ready for serving requests.
+# To indicate this server is ready for serving requests.
 @app.route('/ready', methods=['GET'])
 def ready():
     return 'OK', 200

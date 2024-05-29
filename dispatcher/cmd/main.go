@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/gorilla/mux"
 
@@ -15,6 +14,8 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stderr)
+
 	var concurLimit int64
 	flag.Int64Var(&concurLimit, "concur_limit", 3, "Set the concurrency limit")
 
@@ -33,12 +34,6 @@ func main() {
 		dispatcher.Dispatch("beta", w, r)
 	})
 
-	ticker := core.NewTicker(time.Second)
-	ticker.Start(func() {
-		log.Println("apiMgr count alpha", dispatcher.GetAPILimitMgr().GetConcurrentCallCount("alpha"))
-		log.Println("apiMgr count beta", dispatcher.GetAPILimitMgr().GetConcurrentCallCount("beta"))
-	})
-
 	// Channel to listen for interrupt signals
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -54,7 +49,6 @@ func main() {
 	<-stopChan
 	log.Println("Interrupt signal received. Shutting down...")
 
-	ticker.Stop()
 	// Perform cleanup tasks
 	dispatcher.Shutdown()
 

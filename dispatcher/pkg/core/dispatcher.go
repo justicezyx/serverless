@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -30,7 +31,7 @@ func NewDispatcher() Dispatcher {
 		apiUsageTracker: NewAPIUsageTracker(),
 	}
 
-	const runtimeImage = "runtime:latest"
+	const runtimeImage = "runtime:4"
 
 	alphaContainer := Container{
 		image: runtimeImage,
@@ -63,44 +64,56 @@ func (d *Dispatcher) Shutdown() {
 	d.launcher.ShutdownAll()
 }
 
-func (d *Dispatcher) Dispatch(fn string, w http.ResponseWriter, r *http.Request) {
+// Contextual information of serving a serverless function call.
+type CallContext struct {
+	// The name of the function to invoke.
+	fn string
+
+	// The timeout waiting for the function instance to be ready.
+	instRdyTimeout time.Duration
+}
+
+func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Request) {
 	user := r.Header.Get("User")
 	if user == "" {
 		http.Error(w, "User header not provided", http.StatusBadRequest)
 		return
 	}
 
-	if !d.permMgr.IsUserAllowed(user, fn) {
+	if !d.permMgr.IsUserAllowed(user, ctx.fn) {
 		http.Error(w, fmt.Sprintf("User %s is not allowed to call function %s", user, fn), http.StatusForbidden)
 		return
 	}
 
 	// TODO/Req: Before calling PickUrl(), should add an API to Launcher to determine if a new RunningContainer should be
 	// launched. Candidate: Launcher::LaunchNewInstances()
-	target, err := d.launcher.PickUrl(fn)
+	target, err := d.launcher.PickUrl(ctx.fn)
 	if err != nil {
 		// Indicating there is no running container instances for this function.
 		// Need to launch new ones.
-		launchErr := d.launcher.Launch(fn)
+		launchErr := d.launcher.Launch(ctx.fn)
 		if launchErr != nil {
-			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", fn, launchErr),
+			log.Println("launchErr", launchErr)
+			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", ctx.fn, launchErr),
 				http.StatusInternalServerError)
 			return
 		}
 	}
-	target, err = d.launcher.PickUrl(fn)
+	target, err = d.launcher.PickUrl(ctx.fn)
 	// TODO/Req: Wait for the launched instance to be ready. Launcher.Launch() should return a RunningContainer object for
 	// checking readiness. PickUrl() should return a RunningContainer object, and let the caller to wait for readiness.
 
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Could not find container instance for function '%s', error: %v", fn, err),
+		http.Error(w, fmt.Sprintf("Could not find container instance for function '%s', error: %v", ctx.fn, err),
 			http.StatusInternalServerError)
 		return
 	}
 
-	d.apiLimitMgr.StartAPICall(fn, 10*time.Second)
+	d.apiLimitMgr.StartAPICall(ctx.fn, 10*time.Second)
 	apiStartTime := d.apiUsageTracker.StartAPICall(user)
+	log.Println("Before ProxyRequest")
 	ProxyRequest(target, w, r)
+	log.Println("After ProxyRequest")
 	d.apiUsageTracker.EndAPICall(user, apiStartTime)
-	d.apiLimitMgr.FinishAPICall(fn)
+	d.apiLimitMgr.FinishAPICall(ctx.fn)
 }

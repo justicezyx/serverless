@@ -209,7 +209,7 @@ func (c Container) Run() (*RunningContainer, error) {
 	return &RunningContainer{
 		containerID: resp.ID,
 		Url:         fmt.Sprintf("http://localhost:%d/invoke", hostPort),
-		readyUrl:    fmt.Sprintf("http://localhost:%d/ready", hostPort),
+		readyUrl:    fmt.Sprintf("http://localhost:%d/invoke", hostPort),
 		concurLimit: 2,
 		launchTime:  time.Now(),
 	}, nil
