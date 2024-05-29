@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -53,7 +54,6 @@ type RunningContainer struct {
 
 	// The URL to check the readiness of the service running inside the service.
 	readyUrl string
-
 
 	// TODO: Add mutex protection to check isReady. As the running container will be checked for readiness for each
 	// incoming requests (and if the container is not ready, the caller needs to wait). The check is invoked by HTTP
@@ -190,15 +190,28 @@ func (c RunningContainer) Remove() error {
 
 // Call this to record serving time.
 func (c *RunningContainer) AddBusyTime(d time.Duration) {
-	d.busyTimeMu.Lock()
-	defer d.busyTimeMu.Unlock()
-	d.busyTime += d
+	c.busyTimeMu.Lock()
+	defer c.busyTimeMu.Unlock()
+	c.busyTime += d
 }
 
 func (c RunningContainer) BusyTime() time.Duration {
-	d.busyTimeMu.RLock()
-	defer d.busyTimeMu.RUnlock()
-	return d.busyTime
+	c.busyTimeMu.RLock()
+	defer c.busyTimeMu.RUnlock()
+	return c.busyTime
 }
 
-func (c RunningContainer)
+func (c RunningContainer) WaitForReady(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(c.readyUrl)
+		if err != nil {
+			resp.Body.Close()
+		}
+		if err == nil && resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("request to %s did not succeed within the timeout period", c.readyUrl)
+}
