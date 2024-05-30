@@ -1,6 +1,8 @@
 # Runtime
 
-To start runtime without using docker container:
+Runtime is implemented as docker container, and HTTP services.
+
+To start runtime without using docker container, and curling it:
 ```shell
 python3 runtime.py --file=runtime_beta.py --class_name=RuntimeBeta
 curl -X POST http://127.0.0.1:5000/invoke \
