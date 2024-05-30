@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -13,9 +14,9 @@ type MockContainer struct {
 	mock.Mock
 }
 
-func (m *MockContainer) Run() (RunningContainer, error) {
+func (m *MockContainer) Run(_ string) (*RunningContainer, error) {
 	args := m.Called()
-	return args.Get(0).(RunningContainer), args.Error(1)
+	return args.Get(0).(*RunningContainer), args.Error(1)
 }
 
 type MockRunningContainer struct {
@@ -34,7 +35,7 @@ func (m *MockRunningContainer) Remove() error {
 // TestLauncher_Launch tests the Launch method of the Launcher
 func TestLauncher_Launch(t *testing.T) {
 	// Initialize dispatcher
-	dispatcher := NewLauncher()
+	dispatcher := NewLauncher(time.Second)
 
 	// Create a mock container
 	mockContainer := new(MockContainer)
@@ -49,12 +50,13 @@ func TestLauncher_Launch(t *testing.T) {
 	mockContainer.On("Run", mock.Anything).Return(mockRunningContainer, nil)
 
 	// Call the Launch method
-	err := dispatcher.Launch("testFn")
+	rc, err := dispatcher.Launch("testFn")
 
 	// Assertions
+	assert.Equal(t, rc.name, "testFn-0")
 	assert.NoError(t, err)
-	assert.Contains(t, dispatcher.fnInstanceMap, "testFn")
-	assert.Equal(t, dispatcher.fnInstanceMap["testFn"][0].Url, "http://localhost:5000")
+	assert.Contains(t, dispatcher.fnInstsMap, "testFn")
+	assert.Equal(t, dispatcher.fnInstsMap["testFn"][0].Url, "http://localhost:5000")
 
 	// Verify the expectations
 	mockContainer.AssertExpectations(t)
@@ -62,52 +64,52 @@ func TestLauncher_Launch(t *testing.T) {
 
 // TestLauncher_LaunchNoContainer tests the Launch method when there is no container
 func TestLauncher_LaunchNoContainer(t *testing.T) {
-	dispatcher := NewLauncher()
+	dispatcher := NewLauncher(time.Second)
 
-	err := dispatcher.Launch("unknownFn")
+	_, err := dispatcher.Launch("unknownFn")
 
 	assert.Error(t, err)
 }
 
 // TestLauncher_LaunchRunError tests the Launch method when the container fails to run
 func TestLauncher_LaunchRunError(t *testing.T) {
-	dispatcher := NewLauncher()
+	dispatcher := NewLauncher(time.Second)
 
 	mockContainer := new(MockContainer)
 	dispatcher.registerContainer("testFn", mockContainer)
 
 	mockContainer.On("Run", mock.Anything).Return(RunningContainer{}, errors.New("run error"))
 
-	err := dispatcher.Launch("testFn")
+	_, err := dispatcher.Launch("testFn")
 
 	assert.Error(t, err)
-	assert.NotContains(t, dispatcher.fnInstanceMap, "testFn")
+	assert.NotContains(t, dispatcher.fnInstsMap, "testFn")
 
 	mockContainer.AssertExpectations(t)
 }
 
 // TestLauncher_PickUrl tests the PickUrl method of the Launcher
 func TestLauncher_PickUrl(t *testing.T) {
-	dispatcher := NewLauncher()
+	dispatcher := NewLauncher(time.Second)
 
 	mockRunningContainer := RunningContainer{
 		Url: "http://localhost:5000",
 	}
 
-	dispatcher.fnInstanceMap["testFn"] = []RunningContainer{mockRunningContainer}
+	dispatcher.fnInstsMap["testFn"] = []*RunningContainer{&mockRunningContainer}
 
-	url, err := dispatcher.PickUrl("testFn")
+	rc, err := dispatcher.PickInst("testFn")
 
 	assert.NoError(t, err)
-	assert.Equal(t, "http://localhost:5000", url)
+	assert.Equal(t, "http://localhost:5000", rc.name)
 }
 
 // TestLauncher_PickUrlNoRunningContainer tests the PickUrl method when there is no running container
 func TestLauncher_PickUrlNoRunningContainer(t *testing.T) {
-	dispatcher := NewLauncher()
+	dispatcher := NewLauncher(time.Second)
 
-	url, err := dispatcher.PickUrl("unknownFn")
+	rc, err := dispatcher.PickInst("unknownFn")
 
 	assert.Error(t, err)
-	assert.Equal(t, "", url)
+	assert.Equal(t, rc, nil)
 }

@@ -134,7 +134,7 @@ func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Re
 
 	err = rc.WaitForReady(ctx.InstRdyTimeout)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Timeout waiting for the instance to become ready, error: %v", ctx.Fn, err),
+		http.Error(w, fmt.Sprintf("Timeout waiting for the instance to become ready, error: %v", err),
 			http.StatusInternalServerError)
 		return
 	}

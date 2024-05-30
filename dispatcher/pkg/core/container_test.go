@@ -23,7 +23,7 @@ func TestContainerRun(t *testing.T) {
 	fmt.Println("NewContainer time duration:", timer.Elapsed())
 
 	timer = NewTimer()
-	rc, err := container.Run()
+	rc, err := container.Run("test-container")
 	fmt.Println("RunContainer time duration:", timer.Elapsed())
 
 	assert.Nil(t, err, "Expected no error, got %v", err)
@@ -70,8 +70,8 @@ func TestWaitForReady(t *testing.T) {
 	c := RunningContainer{
 		readyUrl: url,
 	}
-	assert.False(t, c.isReady)
+	assert.False(t, c.IsReady())
 	err = c.WaitForReady(time.Second)
 	assert.Nil(t, err)
-	assert.True(t, c.isReady)
+	assert.True(t, c.IsReady())
 }
