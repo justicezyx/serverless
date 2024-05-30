@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+// A notification sent to launcher to instruct it to launch a new instance.
+// Send back the launched rc in the enclosed channel.
+type launchNotification struct {
+	// The function that needs new RunningContainer.
+	fn string
+
+	// The channel used to receive the created RunningContainer.
+	rcChan chan *RunningContainer
+}
+
 // Launcher stores containers for starting instances to serve function invocations.
 // TODO: Needs sync.Mutex to protect from concurrent access.
 type Launcher struct {
@@ -24,7 +34,7 @@ type Launcher struct {
 	fnInstsMap   map[string][]*RunningContainer
 
 	// Notify launcher to immediately start an instance for the received function.
-	launchNotifier chan string
+	launchNotifier chan launchNotification
 
 	// The interval for periodically check the load on each RunningContainer.
 	checkInterval time.Duration
@@ -34,7 +44,7 @@ func NewLauncher(interval time.Duration) Launcher {
 	return Launcher{
 		fnContainerMap: make(map[string]ContainerInterface),
 		fnInstsMap:     make(map[string][]*RunningContainer),
-		launchNotifier: make(chan string),
+		launchNotifier: make(chan launchNotification),
 		checkInterval:  interval,
 	}
 }
@@ -56,11 +66,39 @@ func (d *Launcher) Launch(fn string) (*RunningContainer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
 	}
-	if _, ok := d.fnInstsMap[fn]; !ok {
-		d.fnInstsMap[fn] = make([]*RunningContainer, 0)
+	rcs, ok := d.fnInstsMap[fn]
+	if !ok {
+		rcs = make([]*RunningContainer, 0)
 	}
-	d.fnInstsMap[fn] = append(d.fnInstsMap[fn], rc)
+	d.fnInstsMap[fn] = append(rcs, rc)
 	return rc, nil
+}
+
+func (l *Launcher) InstsCount(fn string) int {
+	l.fnInstsMapMu.Lock()
+	defer l.fnInstsMapMu.Unlock()
+
+	rcs, ok := l.fnInstsMap[fn]
+	if !ok {
+		return 0
+	}
+	return len(rcs)
+}
+
+func (l *Launcher) hasUnrdyInsts(fn string) bool {
+	l.fnInstsMapMu.Lock()
+	defer l.fnInstsMapMu.Unlock()
+
+	rcs, ok := l.fnInstsMap[fn]
+	if !ok {
+		return false
+	}
+	for _, rc := range rcs {
+		if !rc.IsReady() {
+			return true
+		}
+	}
+	return false
 }
 
 // Brings down one RunningContainer for function fn.
@@ -98,17 +136,6 @@ func (l *Launcher) Shutdown(fn string) (*RunningContainer, error) {
 
 // Returns the URL for serving the input function.
 // Picks a random container instances, and returns its URL.
-func (d *Launcher) PickUrl(fn string) (string, error) {
-	rcs, ok := d.fnInstsMap[fn]
-	if !ok || len(rcs) == 0 {
-		return "", fmt.Errorf("No running container for function %s", fn)
-	}
-	idx := rand.Intn(len(rcs))
-	return rcs[idx].Url, nil
-}
-
-// Returns the URL for serving the input function.
-// Picks a random container instances, and returns its URL.
 func (d *Launcher) PickInst(fn string) (*RunningContainer, error) {
 	d.fnInstsMapMu.Lock()
 	defer d.fnInstsMapMu.Unlock()
@@ -123,17 +150,20 @@ func (d *Launcher) PickInst(fn string) (*RunningContainer, error) {
 
 // Shutdown all container instances. Called when shutting down server.
 func (d *Launcher) ShutdownAll() {
+	d.fnInstsMapMu.Lock()
+	defer d.fnInstsMapMu.Unlock()
+
 	var wg sync.WaitGroup
-	for _, runningContainers := range d.fnInstsMap {
-		for _, runningContainer := range runningContainers {
+	for _, rcs := range d.fnInstsMap {
+		for _, rc := range rcs {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if err := runningContainer.Stop(); err != nil {
-					log.Println("Failed to stop running container:", runningContainer)
+				if err := rc.Stop(); err != nil {
+					log.Println("Failed to stop running container:", rc)
 				}
-				if err := runningContainer.Remove(); err != nil {
-					log.Println("Failed to remove running container:", runningContainer)
+				if err := rc.Remove(); err != nil {
+					log.Println("Failed to remove running container:", rc)
 				}
 			}()
 		}
@@ -150,13 +180,14 @@ func (l *Launcher) calUtilRatio() map[string]float64 {
 	var totalRdyTime time.Duration
 	for fn, rcs := range l.fnInstsMap {
 		for _, rc := range rcs {
-			if !rc.IsReady() || rc.BusyTime() < 60*time.Second {
+			if !rc.IsReady() {
 				continue
 			}
 			totalBusyTime += rc.BusyTime()
 			totalRdyTime += time.Now().Sub(rc.rdyTime)
 		}
-		if totalBusyTime > 60*time.Second {
+		// Avoid initial burst
+		if totalBusyTime > 10*time.Second {
 			res[fn] = float64(totalBusyTime) / float64(totalRdyTime)
 		}
 	}
@@ -164,7 +195,7 @@ func (l *Launcher) calUtilRatio() map[string]float64 {
 }
 
 const utilRatioUpperBound = 0.8
-const utilRatioLowerBound = 0.5
+const utilRatioLowerBound = 0.4
 
 // Loop forever to monitor the utilization, if it's too high, launch one new instance.
 // If it's too low, shutdown instance.
@@ -172,23 +203,30 @@ func (l *Launcher) MonitorForever() {
 	ticker := time.NewTicker(l.checkInterval)
 	for {
 		select {
-		case fn := <-l.launchNotifier:
-			log.Println("Received launch notification, function:", fn)
-			_, err := l.Launch(fn)
+		case n := <-l.launchNotifier:
+			log.Println("Received launch notification, function:", n.fn)
+			rc, err := l.Launch(n.fn)
 			if err != nil {
-				log.Println("Failed to launch container, function:", fn)
+				log.Println("Failed to launch container, function:", n.fn)
 			}
+			n.rcChan <- rc
 		case _ = <-ticker.C:
 			utilRatio := l.calUtilRatio()
 			log.Println("Checking for utilization ratio:", utilRatio)
 			for fn, r := range utilRatio {
+				if l.hasUnrdyInsts(fn) {
+					// Only check stable instances.
+					continue
+				}
 				if r > utilRatioUpperBound {
 					rc, err := l.Launch(fn)
-					log.Println("Launched RunningContainer:", rc, "error:", err)
+					log.Println("Launched RunningContainer:", rc, "error:", err, "function:", fn)
 				}
 				if r < utilRatioLowerBound {
-					rc, err := l.Shutdown(fn)
-					log.Println("Shutdown RunningContainer:", rc, "error:", err)
+					if l.InstsCount(fn) > 1 {
+						rc, err := l.Shutdown(fn)
+						log.Println("Shutdown RunningContainer:", rc, "error:", err, "function:", fn)
+					}
 				}
 			}
 		}

@@ -20,18 +20,7 @@ class Alpha:
         self.payload = {"args": args}
 
     def __call__(self):
-        try:
-            response = requests.post(self.url, json=self.payload, headers=self.headers)
-            print(response.content)
-            response.raise_for_status()  # Raise an error for bad status codes
-            try:
-                return response.json()
-            except ValueError:
-                print("Response content is not valid JSON:", response.text)
-                return None
-        except requests.exceptions.RequestException as e:
-            print("Request failed:", e)
-            return None
+        return requests.post(self.url, json=self.payload, headers=self.headers)
 
 class Beta:
     def __init__(self, args, user):
@@ -41,28 +30,23 @@ class Beta:
         self.payload = {"args": args}
 
     def __call__(self):
-        try:
-            response = requests.post(self.url, json=self.payload, headers=self.headers)
-            response.raise_for_status()  # Raise an error for bad status codes
-            try:
-                return response.json()
-            except ValueError:
-                print("Response content is not valid JSON:", response.text)
-                return None
-        except requests.exceptions.RequestException as e:
-            print("Request failed:", e, response.body)
-            return None
+        return requests.post(self.url, json=self.payload, headers=self.headers)
 
 def LoopAlpha():
     while True:
-        # Invoke the Alpha Runtime
-        response = Alpha({"prompt": "What should I do today?"}, args.user)()
-        print("Alpha response:", response)
+        try:
+            response = Alpha({"prompt": "What should I do today?"}, args.user)()
+            print("Alpha response:", response.text)
+        except Exception as e:
+            print("Request failed:", e)
 
 def LoopBeta():
     while True:
-        response = Beta({"prompt": "What should I do today?"}, args.user)()
-        print("Beta response:", response)
+        try:
+            response = Beta({"prompt": "What should I do today?"}, args.user)()
+            print("Beta response:", response.content)
+        except Exception as e:
+            print("Request failed:", e)
 
 # Usage example
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -90,10 +91,6 @@ type CallContext struct {
 
 	// The timeout waiting for the function instance to become ready.
 	InstRdyTimeout time.Duration
-
-	// Notify launcher to immediately start an instance for the function.
-	// Otherwise, it's just checking the workload, and start new instances when the workload is beyond certain threshold.
-	LaunchNotifier chan string
 }
 
 // Option #1: Queue requests, and let another processor goroutine to fetch request, and send back responses.
@@ -119,38 +116,32 @@ func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// TODO/Req: Before calling PickUrl(), should add an API to Launcher to determine if a new RunningContainer should be
-	// launched. Candidate: Launcher::LaunchNewInstances()
-	target, err := d.launcher.PickUrl(ctx.Fn)
-	if err != nil {
-		// Indicating there is no running container instances for this function.
-		// Need to launch new ones.
-		rc, err := d.launcher.Launch(ctx.Fn)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", ctx.Fn, err),
-				http.StatusInternalServerError)
-			return
-		}
-		err = rc.WaitForReady(ctx.InstRdyTimeout)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Timeout waiting for the instance to become ready, error: %v", ctx.Fn, err),
-				http.StatusInternalServerError)
-			return
-		}
-	}
-	target, err = d.launcher.PickUrl(ctx.Fn)
-	// TODO/Req: Wait for the launched instance to be ready. Launcher.Launch() should return a RunningContainer object for
-	// checking readiness. PickUrl() should return a RunningContainer object, and let the caller to wait for readiness.
+	rc, err := d.launcher.PickInst(ctx.Fn)
 
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Could not find container instance for function '%s', error: %v", ctx.Fn, err),
+		log.Println("Cold start, need to create an instance for function:", ctx.Fn)
+		for {
+			rcChan := make(chan *RunningContainer)
+			d.launcher.launchNotifier <- launchNotification{ctx.Fn, rcChan}
+			rc = <-rcChan
+			if rc != nil {
+				break
+			}
+		}
+	}
+
+	err = rc.WaitForReady(ctx.InstRdyTimeout)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Timeout waiting for the instance to become ready, error: %v", ctx.Fn, err),
 			http.StatusInternalServerError)
 		return
 	}
 
 	d.apiLimitMgr.StartAPICall(ctx.Fn, 10*time.Second)
 	apiStartTime := d.apiUsageTracker.StartAPICall(user)
-	ProxyRequest(target, w, r)
+	ProxyRequest(rc.Url, w, r)
 	d.apiUsageTracker.EndAPICall(user, apiStartTime)
+	callDuration := time.Now().Sub(apiStartTime)
+	rc.AddBusyTime(callDuration)
 	d.apiLimitMgr.FinishAPICall(ctx.Fn)
 }
