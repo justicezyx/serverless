@@ -33,15 +33,13 @@ type Dispatcher struct {
 	apiUsageTracker APIUsageTracker
 }
 
-func NewDispatcher() Dispatcher {
+func NewDispatcher(runtimeImage string) Dispatcher {
 	dispatcher := Dispatcher{
 		launcher:        NewLauncher(time.Second),
 		permMgr:         NewPermMgr(),
 		apiLimitMgr:     NewAPILimitMgr(3 /*default*/),
 		apiUsageTracker: NewAPIUsageTracker(),
 	}
-
-	const runtimeImage = "runtime:4"
 
 	alphaContainer := Container{
 		image: runtimeImage,

@@ -18,11 +18,14 @@ func main() {
 	log.SetOutput(os.Stderr)
 
 	var concurLimit int64
+	var runtimeImage string
+
 	flag.Int64Var(&concurLimit, "concur_limit", 3, "Set the concurrency limit")
+	flag.StringVar(&runtimeImage, "runtime_image", "runtime", "The runtime's docker image")
 
 	flag.Parse()
 
-	dispatcher := core.NewDispatcher()
+	dispatcher := core.NewDispatcher(runtimeImage)
 
 	dispatcher.SetAPIConcurLimit(concurLimit)
 	log.Println("API limit is set to", concurLimit)
