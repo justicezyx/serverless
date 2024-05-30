@@ -37,6 +37,9 @@ func init() {
 }
 
 type RunningContainer struct {
+	// Human readable name for easier debugging.
+	name string
+
 	// Fixed parameter, set at launch time.
 	containerID string
 
@@ -72,7 +75,7 @@ type RunningContainer struct {
 }
 
 func (c *RunningContainer) Stop() error {
-	fmt.Println("stop", c.containerID)
+	fmt.Println("stopping", c)
 	ctx := context.Background()
 	if err := dockerClient.ContainerStop(ctx, c.containerID, container.StopOptions{}); err != nil {
 		return fmt.Errorf("failed to stop container %s: %v", c.containerID, err)
@@ -81,7 +84,7 @@ func (c *RunningContainer) Stop() error {
 }
 
 func (c *RunningContainer) Remove() error {
-	fmt.Println("remove", c.containerID)
+	fmt.Println("removing", c)
 	err := dockerClient.ContainerRemove(context.Background(), c.containerID, container.RemoveOptions{})
 	if err != nil {
 		return fmt.Errorf("Failed to remove container %s: %v", c.containerID, err)
@@ -124,7 +127,7 @@ func (c *RunningContainer) IsReady() bool {
 
 // Define the Container interface
 type ContainerInterface interface {
-	Run() (*RunningContainer, error)
+	Run(name string) (*RunningContainer, error)
 }
 
 // Represents a template of container. After running, a RunningContainer will be created.
@@ -179,7 +182,7 @@ const runtimePort = "5000"
 
 // Run the input image, with the input cmd as the entrypoint, and portBindings as port mapping.
 // The input image must be present locally.
-func (c Container) Run() (*RunningContainer, error) {
+func (c Container) Run(name string) (*RunningContainer, error) {
 	ctx := context.Background()
 
 	hostPort, err := pickPort()
@@ -199,7 +202,7 @@ func (c Container) Run() (*RunningContainer, error) {
 		ExposedPorts: exposedPorts,
 	}, &container.HostConfig{
 		PortBindings: portMap,
-	}, &network.NetworkingConfig{}, nil /*platform*/, "" /*name*/)
+	}, &network.NetworkingConfig{}, nil /*platform*/, name)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create container: %v", err)
@@ -210,6 +213,7 @@ func (c Container) Run() (*RunningContainer, error) {
 	}
 
 	return &RunningContainer{
+		name:        name,
 		containerID: resp.ID,
 		Url:         fmt.Sprintf("http://localhost:%d/invoke", hostPort),
 		readyUrl:    fmt.Sprintf("http://localhost:%d/ready", hostPort),

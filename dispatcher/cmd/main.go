@@ -58,6 +58,8 @@ func main() {
 	<-stopChan
 	log.Println("Interrupt signal received. Shutting down...")
 
+	dispatcher.StopLaunchMonitor()
+
 	// Perform cleanup tasks
 	dispatcher.Shutdown()
 

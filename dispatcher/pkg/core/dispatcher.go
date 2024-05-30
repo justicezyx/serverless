@@ -65,6 +65,10 @@ func NewDispatcher() Dispatcher {
 	return dispatcher
 }
 
+func (d *Dispatcher) StopLaunchMonitor() {
+	d.launcher.stopMonitorChan <- struct{}{}
+}
+
 func (d *Dispatcher) getMaxinstCountPerFn(fn string) int {
 	if limit, ok := d.cfg.maxInstCountPerFn[fn]; ok {
 		return limit

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -28,13 +29,17 @@ type Launcher struct {
 	// ContainerInterface is used for testing.
 	fnContainerMap map[string]ContainerInterface
 
+	// The counter of running container created for function.
+	fnContainerNameCounter map[string]int
+
 	// A map from the function to the corresponding running container instances.
 	// Picking any one of these instances for serving the function.
 	fnInstsMapMu sync.Mutex
 	fnInstsMap   map[string][]*RunningContainer
 
 	// Notify launcher to immediately start an instance for the received function.
-	launchNotifier chan launchNotification
+	launchNotifier  chan launchNotification
+	stopMonitorChan chan struct{}
 
 	// The interval for periodically check the load on each RunningContainer.
 	checkInterval time.Duration
@@ -42,10 +47,20 @@ type Launcher struct {
 
 func NewLauncher(interval time.Duration) Launcher {
 	return Launcher{
-		fnContainerMap: make(map[string]ContainerInterface),
-		fnInstsMap:     make(map[string][]*RunningContainer),
-		launchNotifier: make(chan launchNotification),
-		checkInterval:  interval,
+		fnContainerMap:         make(map[string]ContainerInterface),
+		fnContainerNameCounter: make(map[string]int),
+		fnInstsMap:             make(map[string][]*RunningContainer),
+		launchNotifier:         make(chan launchNotification),
+		stopMonitorChan:        make(chan struct{}),
+		checkInterval:          interval,
+	}
+}
+
+func (l *Launcher) debugLog() {
+	for fn, rcs := range l.fnInstsMap {
+		for _, rc := range rcs {
+			log.Println(fn, rc.name)
+		}
 	}
 }
 
@@ -62,7 +77,13 @@ func (d *Launcher) Launch(fn string) (*RunningContainer, error) {
 	if !ok {
 		return nil, fmt.Errorf("Could not find Container for serverless function %s", fn)
 	}
-	rc, err := c.Run()
+	counter, ok := d.fnContainerNameCounter[fn]
+	if !ok {
+		counter = 0
+	}
+	name := fn + "-" + strconv.Itoa(counter)
+	d.fnContainerNameCounter[fn] = counter + 1
+	rc, err := c.Run(name)
 	if err != nil {
 		return nil, fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
 	}
@@ -71,6 +92,8 @@ func (d *Launcher) Launch(fn string) (*RunningContainer, error) {
 		rcs = make([]*RunningContainer, 0)
 	}
 	d.fnInstsMap[fn] = append(rcs, rc)
+	log.Println("After launching an instance")
+	d.debugLog()
 	return rc, nil
 }
 
@@ -113,17 +136,26 @@ func (l *Launcher) Shutdown(fn string) (*RunningContainer, error) {
 
 	youngest := rcs[0]
 	idx := 0
-	for i, rc := range rcs[1:] {
+	for i, rc := range rcs {
 		if rc.launchTime.After(youngest.launchTime) {
+			log.Println("youngest", *youngest, "idx", idx, "i", i)
 			youngest = rc
 			idx = i
+			log.Println("youngest", *youngest, "idx", idx, "i", i)
 		}
 	}
 
+	log.Println("youngest", *youngest, "idx", idx)
 	// Remove the RunningContainer from the map
+	l.debugLog()
 	rcs[idx] = rcs[len(rcs)-1]
+	l.debugLog()
 	rcs = rcs[:len(rcs)-1]
+	l.debugLog()
 	l.fnInstsMap[fn] = rcs
+	l.debugLog()
+	log.Println("after Launcher.Shutdown:")
+	l.debugLog()
 
 	if err := youngest.Stop(); err != nil {
 		log.Println("Failed to stop running container:", youngest)
@@ -159,6 +191,7 @@ func (d *Launcher) ShutdownAll() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				log.Println("stopping and removing", *rc, "in Launcher::Shutdown")
 				if err := rc.Stop(); err != nil {
 					log.Println("Failed to stop running container:", rc)
 				}
@@ -195,7 +228,7 @@ func (l *Launcher) calUtilRatio() map[string]float64 {
 }
 
 const utilRatioUpperBound = 0.8
-const utilRatioLowerBound = 0.4
+const utilRatioLowerBound = 0.7
 
 // Loop forever to monitor the utilization, if it's too high, launch one new instance.
 // If it's too low, shutdown instance.
@@ -207,7 +240,7 @@ func (l *Launcher) MonitorForever() {
 			log.Println("Received launch notification, function:", n.fn)
 			rc, err := l.Launch(n.fn)
 			if err != nil {
-				log.Println("Failed to launch container, function:", n.fn)
+				log.Println("Failed to launch container, function:", n.fn, "error:", err)
 			}
 			n.rcChan <- rc
 		case _ = <-ticker.C:
@@ -229,6 +262,9 @@ func (l *Launcher) MonitorForever() {
 					}
 				}
 			}
+		case _ = <-l.stopMonitorChan:
+			log.Println("Received stopMonitorChan")
+			return
 		}
 	}
 }
