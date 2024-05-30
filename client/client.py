@@ -52,8 +52,8 @@ def LoopBeta():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Invoke Alpha or Beta Runtime with a user.')
     parser.add_argument('--user', required=True, help='User identifier for the request')
-    parser.add_argument('--concurrency', default=1, help='How many concurrent' +
-                        'calls to each function')
+    parser.add_argument('--concurrency', default=1, help='How many threads to ' +
+                        'issue sequential calls to each function')
     args = parser.parse_args()
 
     threads = []
