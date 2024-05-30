@@ -34,7 +34,7 @@ type Dispatcher struct {
 
 func NewDispatcher() Dispatcher {
 	dispatcher := Dispatcher{
-		launcher:        NewLauncher(),
+		launcher:        NewLauncher(time.Second),
 		permMgr:         NewPermMgr(),
 		apiLimitMgr:     NewAPILimitMgr(3 /*default*/),
 		apiUsageTracker: NewAPIUsageTracker(),

@@ -54,17 +54,17 @@ type RunningContainer struct {
 	// The URL to check the readiness of the service running inside the service.
 	readyUrl string
 
-	// TODO: Add mutex protection to check isReady. As the running container will be checked for readiness for each
+	// TODO: Add mutex protection to check isRdy. As the running container will be checked for readiness for each
 	// incoming requests (and if the container is not ready, the caller needs to wait). The check is invoked by HTTP
 	// handler functions for each incoming requests, so they would happen concurrently.
-	readyMu sync.Mutex
+	rdyMu sync.Mutex
 	// True if the container is ready to serve requests.
 	// Needed because container needs some time to initiate.
-	// Protected by readyMu
-	isReady bool
+	// Protected by rdyMu
+	isRdy bool
 	// The time when this instance is ready and is able to serve requests.
-	// Protected by readyMu
-	readyTime time.Time
+	// Protected by rdyMu
+	rdyTime time.Time
 
 	// The time duration that this instance is actually serving requests.
 	busyTimeMu sync.RWMutex
@@ -108,18 +108,18 @@ func (c *RunningContainer) WaitForReady(timeout time.Duration) error {
 	}
 	err := WaitForHTTPGetOK(c.readyUrl, 100*time.Millisecond, timeout)
 	if err == nil {
-		c.readyMu.Lock()
-		defer c.readyMu.Unlock()
-		c.readyTime = time.Now()
-		c.isReady = true
+		c.rdyMu.Lock()
+		defer c.rdyMu.Unlock()
+		c.rdyTime = time.Now()
+		c.isRdy = true
 	}
 	return err
 }
 
 func (c *RunningContainer) IsReady() bool {
-	c.readyMu.Lock()
-	defer c.readyMu.Unlock()
-	return c.isReady
+	c.rdyMu.Lock()
+	defer c.rdyMu.Unlock()
+	return c.isRdy
 }
 
 // Define the Container interface

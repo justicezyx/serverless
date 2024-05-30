@@ -62,7 +62,7 @@ def LoopAlpha():
 def LoopBeta():
     while True:
         response = Beta({"prompt": "What should I do today?"}, args.user)()
-        print("Alpha response:", response)
+        print("Beta response:", response)
 
 # Usage example
 if __name__ == "__main__":
