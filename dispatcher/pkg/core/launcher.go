@@ -36,23 +36,23 @@ func (d *Launcher) registerContainer(fn string, c ContainerInterface) {
 }
 
 // Launch a container instance for serving function fn.
-func (d *Launcher) Launch(fn string) error {
+func (d *Launcher) Launch(fn string) (*RunningContainer, error) {
 	d.fnInstsMapMu.Lock()
 	defer d.fnInstsMapMu.Unlock()
 
 	c, ok := d.fnContainerMap[fn]
 	if !ok {
-		return fmt.Errorf("Could not find Container for serverless function %s", fn)
+		return nil, fmt.Errorf("Could not find Container for serverless function %s", fn)
 	}
 	rc, err := c.Run()
 	if err != nil {
-		return fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
+		return nil, fmt.Errorf("Could not run container for function: %s, error: %v", fn, err)
 	}
 	if _, ok := d.fnInstsMap[fn]; !ok {
 		d.fnInstsMap[fn] = make([]*RunningContainer, 0)
 	}
 	d.fnInstsMap[fn] = append(d.fnInstsMap[fn], rc)
-	return rc.WaitForReady(8 * time.Second)
+	return rc, nil
 }
 
 // Returns the URL for serving the input function.
@@ -64,6 +64,23 @@ func (d Launcher) PickUrl(fn string) (string, error) {
 	}
 	idx := rand.Intn(len(rcs))
 	return rcs[idx].Url, nil
+}
+
+// Returns the URL for serving the input function.
+// Picks a random container instances, and returns its URL.
+func (d Launcher) PickInst(fn string) (*RunningContainer, error) {
+	rcs, ok := d.fnInstsMap[fn]
+	if !ok || len(rcs) == 0 {
+		return nil, fmt.Errorf("No running container for function %s", fn)
+	}
+	rdyRCs := make([]*RunningContainer, 0, len(rcs))
+	for _, rc := range rcs {
+		if rc.IsReady() {
+			rdyRCs = append(rdyRCs, rc)
+		}
+	}
+	rand.Seed(time.Now().UnixNano())
+	return rdyRCs[rand.Intn(len(rdyRCs))], nil
 }
 
 // Shutdown all container instances. Called when shutting down server.

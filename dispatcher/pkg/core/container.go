@@ -103,6 +103,9 @@ func (c *RunningContainer) BusyTime() time.Duration {
 }
 
 func (c *RunningContainer) WaitForReady(timeout time.Duration) error {
+	if c.IsReady() {
+		return nil
+	}
 	err := WaitForHTTPGetOK(c.readyUrl, 100*time.Millisecond, timeout)
 	if err == nil {
 		c.readyMu.Lock()

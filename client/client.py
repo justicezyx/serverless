@@ -1,5 +1,6 @@
 import requests
 import argparse
+import threading
 
 base_url = "http://localhost:8080/"
 headers = {
@@ -52,13 +53,35 @@ class Beta:
             print("Request failed:", e, response.body)
             return None
 
+def LoopAlpha():
+    while True:
+        # Invoke the Alpha Runtime
+        response = Alpha({"prompt": "What should I do today?"}, args.user)()
+        print("Alpha response:", response)
+
+def LoopBeta():
+    while True:
+        response = Beta({"prompt": "What should I do today?"}, args.user)()
+        print("Alpha response:", response)
+
 # Usage example
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Invoke Alpha or Beta Runtime with a user.')
     parser.add_argument('--user', required=True, help='User identifier for the request')
+    parser.add_argument('--concurrency', default=1, help='How many concurrent' +
+                        'calls to each function')
     args = parser.parse_args()
 
-    # Invoke the Alpha Runtime
-    alpha_response = Alpha({"prompt": "What should I do today?"}, args.user)()
-    print("Alpha response:", alpha_response)
+    threads = []
+    for i in range(args.concurrency):
+        alphaThread = threading.Thread(target=LoopAlpha)
+        alphaThread.start()
+        threads.append(alphaThread)
 
+        betaThread = threading.Thread(target=LoopBeta)
+        betaThread.start()
+        threads.append(betaThread)
+
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()

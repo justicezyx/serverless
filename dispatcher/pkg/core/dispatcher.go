@@ -88,8 +88,41 @@ type CallContext struct {
 
 	// The timeout waiting for the function instance to become ready.
 	InstRdyTimeout time.Duration
+
+	// Notify launcher to immediately start an instance for the function.
+	// Otherwise, it's just checking the workload, and start new instances when the workload is beyond certain threshold.
+	LaunchNotifier chan string
 }
 
+func (d *Dispatcher) adjustInstances() {
+}
+
+func (d *Dispatcher) periodicMonitor(ch <-chan string, interval time.Duration) {
+	// Create a ticker that ticks at the specified interval
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			d.adjustInstances()
+		case fn := <-ch:
+			d.launcher.Launch(fn)
+		}
+	}
+}
+
+// Option #1: Queue requests, and let another processor goroutine to fetch request, and send back responses.
+//
+//	type FnInvocation {
+//		 ctx CallContext
+//		 w http.ResponseWriter
+//		 r *http.Request
+//	}
+//
+//	May cause starvation.
+//
+// Option #2: Handle requests inside Dispatch, and wait for another goroutine to start new instances.
 func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Request) {
 	user := r.Header.Get("User")
 	if user == "" {
@@ -108,9 +141,15 @@ func (d *Dispatcher) Dispatch(ctx CallContext, w http.ResponseWriter, r *http.Re
 	if err != nil {
 		// Indicating there is no running container instances for this function.
 		// Need to launch new ones.
-		launchErr := d.launcher.Launch(ctx.Fn)
-		if launchErr != nil {
-			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", ctx.Fn, launchErr),
+		rc, err := d.launcher.Launch(ctx.Fn)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Could not launch container instance for function '%s', error: %v", ctx.Fn, err),
+				http.StatusInternalServerError)
+			return
+		}
+		err = rc.WaitForReady(ctx.InstRdyTimeout)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Timeout waiting for the instance to become ready, error: %v", ctx.Fn, err),
 				http.StatusInternalServerError)
 			return
 		}
