@@ -150,13 +150,15 @@ func (l *Launcher) calUtilRatio() map[string]float64 {
 	var totalRdyTime time.Duration
 	for fn, rcs := range l.fnInstsMap {
 		for _, rc := range rcs {
-			if !rc.IsReady() {
+			if !rc.IsReady() || rc.BusyTime() < 60*time.Second {
 				continue
 			}
 			totalBusyTime += rc.BusyTime()
 			totalRdyTime += time.Now().Sub(rc.rdyTime)
 		}
-		res[fn] = float64(totalBusyTime) / float64(totalRdyTime)
+		if totalBusyTime > 60*time.Second {
+			res[fn] = float64(totalBusyTime) / float64(totalRdyTime)
+		}
 	}
 	return res
 }
@@ -164,7 +166,9 @@ func (l *Launcher) calUtilRatio() map[string]float64 {
 const utilRatioUpperBound = 0.8
 const utilRatioLowerBound = 0.5
 
-func (l *Launcher) DaemonProcess() {
+// Loop forever to monitor the utilization, if it's too high, launch one new instance.
+// If it's too low, shutdown instance.
+func (l *Launcher) MonitorForever() {
 	ticker := time.NewTicker(l.checkInterval)
 	for {
 		select {
@@ -176,6 +180,7 @@ func (l *Launcher) DaemonProcess() {
 			}
 		case _ = <-ticker.C:
 			utilRatio := l.calUtilRatio()
+			log.Println("Checking for utilization ratio:", utilRatio)
 			for fn, r := range utilRatio {
 				if r > utilRatioUpperBound {
 					rc, err := l.Launch(fn)

@@ -55,6 +55,8 @@ func NewDispatcher() Dispatcher {
 	dispatcher.cfg.defaultMaxInstCountPerFn = 3
 	dispatcher.launcher.registerContainer("alpha", alphaContainer)
 	dispatcher.launcher.registerContainer("beta", betaContainer)
+	// Start the monitoring goroutine to constantly watch utnization ratio and launch/shutdown instance accordingly.
+	go dispatcher.launcher.MonitorForever()
 
 	dispatcher.permMgr.AllowUserAPI("test", "alpha")
 	dispatcher.permMgr.AllowUserAPI("test", "beta")
@@ -92,24 +94,6 @@ type CallContext struct {
 	// Notify launcher to immediately start an instance for the function.
 	// Otherwise, it's just checking the workload, and start new instances when the workload is beyond certain threshold.
 	LaunchNotifier chan string
-}
-
-func (d *Dispatcher) adjustInstances() {
-}
-
-func (d *Dispatcher) periodicMonitor(ch <-chan string, interval time.Duration) {
-	// Create a ticker that ticks at the specified interval
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			d.adjustInstances()
-		case fn := <-ch:
-			d.launcher.Launch(fn)
-		}
-	}
 }
 
 // Option #1: Queue requests, and let another processor goroutine to fetch request, and send back responses.
